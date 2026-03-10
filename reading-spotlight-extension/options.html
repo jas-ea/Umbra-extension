@@ -1,0 +1,85 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Reading Spotlight Settings</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <main class="page">
+    <section class="card">
+      <h1>Reading Spotlight settings</h1>
+      <p class="sub">Tune the behavior for long tweets, articles, or general reading.</p>
+
+      <div class="grid">
+        <label>
+          <span>Enable extension</span>
+          <input type="checkbox" id="enabled">
+        </label>
+
+        <label>
+          <span>Dwell before focus (ms)</span>
+          <input type="number" id="dwellMs" min="500" max="12000" step="100">
+        </label>
+
+        <label>
+          <span>Overlay opacity (0.2–0.9)</span>
+          <input type="number" id="overlayOpacity" min="0.2" max="0.9" step="0.01">
+        </label>
+
+        <label>
+          <span>Horizontal padding (px)</span>
+          <input type="number" id="paddingX" min="0" max="120" step="1">
+        </label>
+
+        <label>
+          <span>Vertical padding (px)</span>
+          <input type="number" id="paddingY" min="0" max="120" step="1">
+        </label>
+
+        <label>
+          <span>Corner radius (px)</span>
+          <input type="number" id="cornerRadius" min="0" max="48" step="1">
+        </label>
+
+        <label>
+          <span>Transition speed (ms)</span>
+          <input type="number" id="transitionMs" min="80" max="1200" step="10">
+        </label>
+
+        <label>
+          <span>Minimum target width (px)</span>
+          <input type="number" id="minWidth" min="120" max="1600" step="10">
+        </label>
+
+        <label>
+          <span>Minimum target height (px)</span>
+          <input type="number" id="minHeight" min="80" max="1600" step="10">
+        </label>
+
+        <label>
+          <span>Stationary tolerance (px)</span>
+          <input type="number" id="stationaryTolerance" min="2" max="80" step="1">
+        </label>
+
+        <label>
+          <span>Reveal buffer on move-out (px)</span>
+          <input type="number" id="revealOnMoveDistance" min="0" max="200" step="1">
+        </label>
+
+        <label>
+          <span>Debug logging</span>
+          <input type="checkbox" id="debug">
+        </label>
+      </div>
+
+      <div class="actions">
+        <button id="save">Save</button>
+        <button id="reset" class="secondary">Reset defaults</button>
+        <span id="status"></span>
+      </div>
+    </section>
+  </main>
+  <script src="options.js"></script>
+</body>
+</html>

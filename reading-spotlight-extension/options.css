@@ -1,0 +1,74 @@
+:root {
+  color-scheme: light;
+}
+body {
+  margin: 0;
+  background: #f5f5f1;
+  color: #111;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+.page {
+  padding: 32px 20px;
+}
+.card {
+  max-width: 900px;
+  margin: 0 auto;
+  background: white;
+  border-radius: 18px;
+  padding: 28px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.05);
+}
+h1 {
+  margin: 0;
+  font-size: 24px;
+}
+.sub {
+  margin-top: 6px;
+  color: #666;
+}
+.grid {
+  margin-top: 24px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(220px, 1fr));
+  gap: 16px;
+}
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 14px;
+}
+input[type="number"] {
+  appearance: none;
+  border: 1px solid #ddd;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 14px;
+}
+input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+}
+.actions {
+  margin-top: 24px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+button {
+  appearance: none;
+  border: none;
+  background: #111;
+  color: white;
+  padding: 10px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+button.secondary {
+  background: #e9e9e4;
+  color: #111;
+}
+#status {
+  color: #356d35;
+  font-size: 14px;
+}
