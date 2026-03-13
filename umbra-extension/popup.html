@@ -1,0 +1,62 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Umbra</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main class="popup">
+    <section class="hero">
+      <div class="brandmark" aria-hidden="true"></div>
+      <div>
+        <h1>Umbra</h1>
+        <p>Soft focus for tweets, articles, and dense pages.</p>
+      </div>
+      <label class="switch" title="Enable Umbra everywhere except ignored sites">
+        <input type="checkbox" id="enabledToggle">
+        <span class="slider"></span>
+      </label>
+    </section>
+
+    <section class="card state-card">
+      <div class="row compact">
+        <span class="label">Current site</span>
+        <strong id="hostname">—</strong>
+      </div>
+      <div class="badges">
+        <span class="badge" id="siteState">Checking…</span>
+        <span class="badge muted">Shift + Click pins</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="control-head">
+        <span>Dwell</span>
+        <strong id="dwellValue">1.8s</strong>
+      </div>
+      <input id="dwellMs" type="range" min="700" max="5000" step="100">
+
+      <div class="control-head space-top">
+        <span>Intensity</span>
+        <strong id="opacityValue">62%</strong>
+      </div>
+      <input id="overlayOpacity" type="range" min="0.25" max="0.85" step="0.01">
+    </section>
+
+    <section class="actions-grid">
+      <button id="focusNow">Focus now</button>
+      <button id="pinNow">Pin block</button>
+      <button id="pauseTab" class="secondary">Pause on this tab</button>
+      <button id="toggleIgnore" class="secondary">Ignore this site</button>
+    </section>
+
+    <footer class="footer">
+      <button id="openOptions" class="linklike">Advanced settings</button>
+      <span>Hotkeys: Alt+Shift+U / Alt+Shift+F</span>
+    </footer>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>

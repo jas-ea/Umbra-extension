@@ -1,0 +1,58 @@
+{
+  "manifest_version": 3,
+  "name": "Umbra",
+  "version": "1.2.2",
+  "description": "A focus overlay for the web that softly dims everything except the content block you are reading.",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "tabs"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Umbra",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "options_page": "options.html",
+  "commands": {
+    "toggle-tab-pause": {
+      "suggested_key": {
+        "default": "Alt+Shift+U"
+      },
+      "description": "Pause or resume Umbra on the current tab"
+    },
+    "focus-now": {
+      "suggested_key": {
+        "default": "Alt+Shift+F"
+      },
+      "description": "Focus the current reading block immediately"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}

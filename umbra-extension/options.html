@@ -1,0 +1,63 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Umbra settings</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <main class="page">
+    <section class="panel intro">
+      <div class="brandline">
+        <div class="brandmark" aria-hidden="true"></div>
+        <div>
+          <h1>Umbra settings</h1>
+          <p>A reading-focus overlay that dims visual noise without replacing the page.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Core behavior</h2>
+      <div class="grid">
+        <label><span>Enable Umbra</span><input type="checkbox" id="enabled"></label>
+        <label><span>Auto focus on hover</span><input type="checkbox" id="autoOnHover"></label>
+        <label><span>Auto focus after scroll settles</span><input type="checkbox" id="autoOnScroll"></label>
+        <label><span>Show outline</span><input type="checkbox" id="showOutline"></label>
+        <label><span>Hover dwell (ms)</span><input type="number" id="dwellMs" min="700" max="5000" step="100"></label>
+        <label><span>Scroll idle delay (ms)</span><input type="number" id="scrollIdleMs" min="100" max="2000" step="20"></label>
+        <label><span>Overlay opacity</span><input type="number" id="overlayOpacity" min="0.25" max="0.85" step="0.01"></label>
+        <label><span>Blur strength (px)</span><input type="number" id="blurPx" min="0" max="10" step="0.5"></label>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Overlay geometry</h2>
+      <div class="grid">
+        <label><span>Horizontal padding (px)</span><input type="number" id="paddingX" min="0" max="120" step="1"></label>
+        <label><span>Vertical padding (px)</span><input type="number" id="paddingY" min="0" max="120" step="1"></label>
+        <label><span>Corner radius (px)</span><input type="number" id="cornerRadius" min="0" max="48" step="1"></label>
+        <label><span>Transition speed (ms)</span><input type="number" id="transitionMs" min="120" max="900" step="10"></label>
+        <label><span>Stationary tolerance (px)</span><input type="number" id="stationaryTolerance" min="2" max="80" step="1"></label>
+        <label><span>Reveal buffer (px)</span><input type="number" id="revealBuffer" min="0" max="200" step="1"></label>
+        <label><span>Viewport focus bias (0–1)</span><input type="number" id="centerBias" min="0.2" max="0.8" step="0.01"></label>
+        <label><span>Debug logs</span><input type="checkbox" id="debug"></label>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Ignored sites</h2>
+      <p class="muted">One hostname per line. Example: x.com or medium.com</p>
+      <textarea id="ignoreDomains" rows="8" placeholder="x.com&#10;docs.google.com"></textarea>
+    </section>
+
+    <section class="panel actions">
+      <button id="save">Save settings</button>
+      <button id="reset" class="secondary">Reset defaults</button>
+      <span id="status"></span>
+    </section>
+  </main>
+  <script src="options.js"></script>
+</body>
+</html>

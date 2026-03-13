@@ -3,10 +3,10 @@
 Umbra is a Chrome extension that helps you stay on a single piece of content by **dimming everything except what you are actually reading**.  
 It works well on timelines, long articles, and documentation pages where your eyes otherwise drift to sidebars, nav bars, and recommendations.
 
-Umbra watches your mouse position, waits for it to settle, then infers the most likely reading block under the cursor (such as a tweet, post, or article body).  
+Umbra reacts to how you actually browse: when you stop scrolling or let the mouse rest over a region, it infers the most likely reading block (a tweet, post, article body, or message) and softly darkens everything else.  
 Once it finds a good candidate, it draws a smooth spotlight around that block and darkens the rest of the viewport.
 
-The extension lives in the `reading-spotlight-extension` folder in this repository.
+The current extension source lives in the `umbra-extension` folder in this repository.
 
 ---
 
@@ -20,8 +20,9 @@ The extension lives in the `reading-spotlight-extension` folder in this reposito
   - Darkens the rest of the page so your current block clearly stands out.  
   - Default overlay strength is high enough to mute distractions while keeping the page usable.
 
-- **Dwell-based activation**  
-  - No extra clicks: hold the mouse still for a short dwell time and the spotlight appears.  
+- **Intent-based activation**  
+  - Hover dwell: hold the mouse still for a short dwell time and the spotlight appears.  
+  - Scroll idle: stop scrolling and Umbra focuses the most plausible reading block near the visible center.  
   - Move away from the block or hit Escape to clear it.
 
 - **Per-tab and global controls**  
@@ -29,21 +30,22 @@ The extension lives in the `reading-spotlight-extension` folder in this reposito
   - Pause or resume behavior on the current tab only.  
   - Adjust dwell timing, overlay strength, padding, transition speed, and more.
 
-- **Keyboard shortcut**  
-  - Default: `Alt+Shift+R` to pause or resume Umbra on the active tab.
+- **Keyboard shortcuts**  
+  - `Alt+Shift+U` pauses or resumes Umbra on the current tab.  
+  - `Alt+Shift+F` focuses the current reading block immediately.
 
 ---
 
 ## How it works
 
-- A **content script** runs on each page and tracks your pointer position.  
+- A **content script** runs on each page and tracks your pointer position and scroll behavior.  
 - When the pointer stops moving for a configurable dwell time, Umbra:
   - Finds the element under the cursor and walks its ancestors and descendants.  
   - Scores candidates based on text length, paragraphs, images, links, and viewport coverage.  
   - Prefers tweet-like and article-like containers on sites that expose semantic attributes.  
   - Chooses the best match and computes a padded rectangle around it.
 - An overlay of four dark masks and a highlighted outline is positioned around that rectangle, leaving only the focused block in normal brightness.
-- As you scroll or resize, the highlight tracks the same target element until you move far enough away, at which point the dwell timer starts over.
+- As you scroll or resize, the highlight tracks the same target element until you move far enough away, at which point the intent model restarts.
 
 All state (such as dwell time and overlay opacity) is stored with `chrome.storage.sync`, so your settings follow you across Chrome profiles where sync is enabled.
 
@@ -55,14 +57,14 @@ All state (such as dwell time and overlay opacity) is stored with `chrome.storag
 
    ```bash
    git clone https://github.com/jas-ea/Umbra-extension.git
-   cd Umbra-extension/reading-spotlight-extension
+   cd Umbra-extension/umbra-extension
    ```
 
 2. In Chrome (or a Chromium-based browser that supports Manifest V3):
    - Open `chrome://extensions`  
    - Enable **Developer mode**  
    - Click **Load unpacked**  
-   - Select the `reading-spotlight-extension` folder
+   - Select the `umbra-extension` folder
 
 3. Umbra should now appear in your extensions list and the toolbar.
 
