@@ -27,8 +27,22 @@
       </div>
       <div class="badges">
         <span class="badge" id="siteState">Checking…</span>
+        <span class="badge muted" id="siteModeBadge">Auto mode</span>
         <span class="badge muted">Shift + Click pins</span>
       </div>
+    </section>
+
+    <section class="card">
+      <div class="control-head">
+        <span>Current site mode</span>
+        <strong id="siteModeText">Auto</strong>
+      </div>
+      <div class="mode-grid">
+        <button id="siteModeAuto" class="secondary mode-btn">Auto</button>
+        <button id="siteModeManual" class="secondary mode-btn">Manual</button>
+        <button id="siteModeOff" class="secondary mode-btn">Off</button>
+      </div>
+      <p class="mode-help" id="modeHelp">Auto focuses when Umbra detects reading intent.</p>
     </section>
 
     <section class="card">
@@ -49,7 +63,7 @@
       <button id="focusNow">Focus now</button>
       <button id="pinNow">Pin block</button>
       <button id="pauseTab" class="secondary">Pause on this tab</button>
-      <button id="toggleIgnore" class="secondary">Ignore this site</button>
+      <button id="toggleIgnore" class="secondary">Add to legacy ignore list</button>
     </section>
 
     <footer class="footer">

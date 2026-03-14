@@ -1,4 +1,19 @@
+## 1.4.0
+
+- Added per-site modes in the popup: Auto, Manual, and Off.
+- Added site override storage via `siteOverrides`.
+- Added first-principles utility-app suppression for interactive, low-reading pages.
+- Added default-off or manual profiles for Google Calendar, Docs editors, Figma, Notion, and Slack.
+- Updated README and architecture docs for public open-source contribution around site modes.
+
 # Changelog
+
+## 1.3.0
+
+- Added a declarative `site-profiles.js` registry so public contributors can add website-specific handling without editing the global engine first.
+- Updated the core engine to resolve an active site profile and use profile-provided quick selectors, preferred selectors, reject selectors, viewport sample points, and fallback selectors.
+- Rewrote the README for public-repo use, documenting architecture, contribution workflow, and the intended split between global heuristics and site-specific fixes.
+- Added `CONTRIBUTING.md`, `docs/SITE_PROFILES.md`, `docs/ARCHITECTURE.md`, issue templates, and a pull request template.
 
 ## 1.2.2
 

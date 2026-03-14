@@ -77,3 +77,19 @@ button.secondary {
 }
 .switch input:checked + .slider { background: #d8d8ff; }
 .switch input:checked + .slider::before { transform: translateX(16px); background: #0d0d11; }
+
+.mode-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 10px;
+}
+.mode-btn.active-mode {
+  background: linear-gradient(180deg, #f4f4ff 0%, #d4d4e7 100%);
+  color: #0d0d11;
+}
+.mode-help {
+  margin-top: 10px;
+  font-size: 11px;
+  color: #9f9fb0;
+}

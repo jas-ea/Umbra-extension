@@ -16,6 +16,8 @@
     autoOnHover: true,
     showOutline: true,
     ignoreDomains: [],
+    siteOverrides: {},
+    appAutoSuppress: true,
     debug: false
   };
 
@@ -63,7 +65,8 @@
     lastInteractionAt: 0,
     lastPointerMoveAt: 0,
     lastScrollAt: 0,
-    pageIntent: 'generic'
+    pageIntent: 'generic',
+    siteProfile: null
   };
 
   const storage = chrome.storage.sync;
@@ -80,8 +83,39 @@
     });
   }
 
+  function getSiteOverrideMode() {
+    const host = normalizeHost(location.hostname);
+    const overrides = state.settings.siteOverrides || {};
+    if (overrides[host]) return overrides[host];
+    const parts = host.split('.');
+    for (let i = 1; i < parts.length - 1; i += 1) {
+      const suffix = parts.slice(i).join('.');
+      if (overrides[suffix]) return overrides[suffix];
+    }
+    return state.siteProfile?.defaultMode || 'auto';
+  }
+
+  function getAutoBlockReason() {
+    if (!state.settings.enabled) return 'disabled';
+    if (state.pausedForTab) return 'paused';
+    if (domainIgnored()) return 'ignored';
+    const siteMode = getSiteOverrideMode();
+    if (siteMode === 'off') return 'site-off';
+    if (siteMode === 'manual') return 'site-manual';
+    if (state.settings.appAutoSuppress && isUtilityLikePage()) return 'utility-page';
+    return null;
+  }
+
+  function canManualRun() {
+    return state.settings.enabled && !state.pausedForTab && !domainIgnored() && getSiteOverrideMode() !== 'off';
+  }
+
   function shouldRun() {
-    return state.settings.enabled && !state.pausedForTab && !domainIgnored();
+    return canManualRun();
+  }
+
+  function canAutoRun() {
+    return canManualRun() && !getAutoBlockReason();
   }
 
   function clamp(v, min, max) {
@@ -103,23 +137,94 @@
     }).length;
   }
 
-  function detectIntentProfile() {
-    const host = pageHost();
-    if (/mail\.google\.com$/.test(host)) return 'gmail';
-    if (/x\.com$|twitter\.com$/.test(host)) return 'timeline';
 
-    if (/substack\.com$/.test(host)) {
-      if (location.pathname.includes('/notes') || document.querySelector('input[placeholder*="Substack" i], [aria-label*="Search Substack" i]')) {
-        return 'timeline';
-      }
-      if (countVisible('article, [role="article"]') > 1) return 'timeline';
-      return 'article';
+  function visibleViewportStats() {
+    const viewportArea = Math.max(1, window.innerWidth * window.innerHeight);
+    const texts = [...document.querySelectorAll('p, article, main, section, li, blockquote')].filter((el) => {
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < window.innerHeight;
+    });
+    const buttons = countVisible('button, [role="button"], input, textarea, select, [contenteditable="true"]');
+    const menus = countVisible('[role="menu"], [role="menubar"], nav, [role="navigation"], [role="tablist"], [role="grid"], [role="tree"], [role="listbox"]');
+    const forms = countVisible('form, input, textarea, select, [contenteditable="true"]');
+    const textChars = texts.slice(0, 40).reduce((sum, el) => sum + ((el.innerText || '').trim().length), 0);
+    const overlayShells = countVisible('[role="application"], [class*="toolbar" i], [class*="sidebar" i], [class*="panel" i], [class*="drawer" i], [class*="calendar" i], [class*="board" i], [class*="canvas" i]');
+    const main = document.querySelector('main, [role="main"]');
+    const mainRect = main?.getBoundingClientRect();
+    const mainAreaRatio = mainRect ? (Math.max(0, Math.min(mainRect.right, window.innerWidth) - Math.max(mainRect.left, 0)) * Math.max(0, Math.min(mainRect.bottom, window.innerHeight) - Math.max(mainRect.top, 0))) / viewportArea : 0;
+    return { buttons, menus, forms, textChars, overlayShells, mainAreaRatio };
+  }
+
+  function isUtilityLikePage() {
+    const profileIntent = state.siteProfile?.intent || 'generic';
+    if (profileIntent === 'article' || profileIntent === 'timeline') return false;
+    if (profileIntent === 'utility') return true;
+    const stats = visibleViewportStats();
+    if (stats.overlayShells >= 3 && stats.textChars < 900) return true;
+    if (stats.menus >= 3 && stats.buttons >= 12 && stats.textChars < 1100) return true;
+    if (stats.forms >= 4 && stats.buttons >= 8 && stats.textChars < 1000) return true;
+    if (stats.mainAreaRatio > 0.75 && stats.buttons >= 14 && stats.textChars < 800) return true;
+    return false;
+  }
+
+
+  function getProfiles() {
+    return Array.isArray(globalThis.UMBRA_SITE_PROFILES) ? globalThis.UMBRA_SITE_PROFILES : [];
+  }
+
+  function resolveSiteProfile() {
+    const ctx = {
+      host: pageHost(),
+      pathname: location.pathname,
+      href: location.href,
+      doc: document
+    };
+    for (const profile of getProfiles()) {
+      try {
+        if (typeof profile.match === 'function' && profile.match(ctx)) return profile;
+      } catch (_) {}
     }
+    return {
+      id: 'generic',
+      label: 'Generic',
+      intent: 'generic',
+      quickSelectors: ['article', 'main', 'section'],
+      preferSelectors: ['article', 'main', 'section'],
+      rejectSelectors: ['aside', 'nav', 'header', 'footer'],
+      rejectTokens: ['sidebar', 'menu', 'toolbar', 'banner', 'modal', 'dialog', 'popup', 'overlay', 'search', 'rail'],
+      viewportPoints: [[0.5, 0.38], [0.56, 0.42], [0.44, 0.42], [0.5, 0.54]],
+      fallbackSelectors: ['article', 'main', 'section', '[role="article"]', '[role="main"]']
+    };
+  }
 
-    if (/medium\.com$|bearblog\.dev$/.test(host)) return 'article';
-    if (countVisible('[data-testid="tweet"], article[role="article"]') > 1) return 'timeline';
-    if (document.querySelector('article, [role="article"], .prose, .entry-content')) return 'article';
-    return 'generic';
+  function selectorList(list) {
+    return Array.isArray(list) ? list.filter(Boolean) : [];
+  }
+
+  function closestAny(node, selectors) {
+    if (!node || !node.closest) return null;
+    for (const selector of selectorList(selectors)) {
+      try {
+        const found = node.closest(selector);
+        if (found) return found;
+      } catch (_) {}
+    }
+    return null;
+  }
+
+  function matchesAny(node, selectors) {
+    if (!node || !node.matches) return false;
+    for (const selector of selectorList(selectors)) {
+      try {
+        if (node.matches(selector)) return true;
+      } catch (_) {}
+    }
+    return false;
+  }
+
+  function detectIntentProfile() {
+    state.siteProfile = resolveSiteProfile();
+    return state.siteProfile.intent || 'generic';
   }
 
   function injectUi() {
@@ -231,8 +336,15 @@
     state.root.style.setProperty('--umbra-transition', `${state.settings.transitionMs}ms`);
     state.root.style.setProperty('--umbra-radius', `${state.settings.cornerRadius}px`);
     state.root.classList.toggle('show-outline', !!state.settings.showOutline);
-    state.root.classList.toggle('show-label', state.pinned);
-    if (state.label) state.label.textContent = state.pinned ? 'Umbra pinned' : 'Umbra active';
+    state.root.classList.toggle('show-label', state.pinned || !!getAutoBlockReason());
+    if (state.label) {
+      const reason = getAutoBlockReason();
+      if (state.pinned) state.label.textContent = 'Umbra pinned';
+      else if (reason === 'site-manual') state.label.textContent = 'Manual mode';
+      else if (reason === 'site-off') state.label.textContent = 'Off on this site';
+      else if (reason === 'utility-page') state.label.textContent = 'Utility app detected';
+      else state.label.textContent = 'Umbra active';
+    }
   }
 
   function hideOverlay() {
@@ -293,12 +405,16 @@
 
   function looksLikeChrome(el, style, cls) {
     if (!el) return true;
+    const profile = state.siteProfile || resolveSiteProfile();
     const tag = el.tagName.toLowerCase();
     if (['nav', 'header', 'footer', 'aside'].includes(tag)) return true;
+    if (matchesAny(el, profile.rejectSelectors)) return true;
     if (style.position === 'fixed' || style.position === 'sticky') return true;
     if (style.pointerEvents === 'none' || style.visibility === 'hidden' || style.display === 'none') return true;
     if (style.overflow === 'hidden' && el.getBoundingClientRect().height < 80) return true;
-    return /sidebar|menu|header|footer|toolbar|banner|modal|dialog|popup|overlay|composer|search|topbar|bottombar|tablist|nav|rail/.test(cls);
+    const rejectTokens = selectorList(profile.rejectTokens).join('|');
+    const pattern = rejectTokens ? new RegExp(rejectTokens) : /sidebar|menu|header|footer|toolbar|banner|modal|dialog|popup|overlay|composer|search|topbar|bottombar|tablist|nav|rail/;
+    return pattern.test(cls);
   }
 
   function looksLikeShell(el) {
@@ -312,6 +428,12 @@
 
   function siteSpecificBoost(el) {
     const cls = `${el.className || ''} ${el.id || ''}`.toLowerCase();
+    const profile = state.siteProfile || resolveSiteProfile();
+    let profileBoost = 0;
+    if (matchesAny(el, profile.preferSelectors)) profileBoost += 18;
+    if (matchesAny(el, profile.rejectSelectors)) profileBoost -= 24;
+    const rejectTokens = selectorList(profile.rejectTokens).join('|');
+    if (rejectTokens && new RegExp(rejectTokens).test(cls)) profileBoost -= 14;
     if (state.pageIntent === 'gmail') {
       let boost = 0;
       if (el.matches?.('tr.zA, [role="row"]')) boost += 28;
@@ -319,22 +441,22 @@
       if (el.matches?.('[role="main"]')) boost -= 16;
       if (/message|mail|thread|conversation|body|snippet/.test(cls)) boost += 14;
       if (/sidebar|compose|inbox|toolbar|search|category|tabs|pane/.test(cls)) boost -= 26;
-      return boost;
+      return boost + profileBoost;
     }
     if (state.pageIntent === 'timeline') {
       let boost = 0;
       if (el.matches?.('[data-testid="tweet"], article[role="article"], article')) boost += 24;
       if (/tweet|post|thread|note|feed|card/.test(cls)) boost += 14;
       if (/sidebar|trend|compose|reply|toolbar|recommend|suggestion|carousel/.test(cls)) boost -= 18;
-      return boost;
+      return boost + profileBoost;
     }
     if (state.pageIntent === 'article') {
       let boost = 0;
       if (el.matches?.('article, main, .prose, .entry-content, .post, .story')) boost += 18;
       if (/article|story|post|content|prose|markdown/.test(cls)) boost += 12;
-      return boost;
+      return boost + profileBoost;
     }
-    return 0;
+    return profileBoost;
   }
 
   function scoreCandidate(el, sourceX, sourceY, sourceKind = 'hover') {
@@ -477,7 +599,8 @@
       if (gmailQuick) return gmailQuick;
     }
 
-    const quickHit = startNode.closest?.('[data-testid="tweet"], article[role="article"], article, [role="main"], main');
+    const profile = state.siteProfile || resolveSiteProfile();
+    const quickHit = closestAny(startNode, profile.quickSelectors) || startNode.closest?.('[data-testid="tweet"], article[role="article"], article, [role="main"], main');
     const quickScore = quickHit ? scoreCandidate(quickHit, sourceX, sourceY, sourceKind) : -Infinity;
 
     let best = quickScore > 0 ? quickHit : null;
@@ -492,7 +615,8 @@
     }
 
     if (!best && startNode.closest) {
-      best = startNode.closest('article, main, section, div, tr');
+      const profileFallback = closestAny(startNode, profile.fallbackSelectors);
+      best = profileFallback || startNode.closest('article, main, section, div, tr');
     }
 
     return expandCandidateWithContext(best);
@@ -520,20 +644,13 @@
   }
 
   function targetFromViewportCenter() {
-    let points;
-    if (state.pageIntent === 'gmail') {
-      points = [
-        [Math.round(window.innerWidth * 0.56), Math.round(window.innerHeight * 0.28)],
-        [Math.round(window.innerWidth * 0.56), Math.round(window.innerHeight * 0.42)],
-        [Math.round(window.innerWidth * 0.56), Math.round(window.innerHeight * 0.56)]
-      ];
-    } else if (state.pageIntent === 'timeline') {
-      points = [
-        [Math.round(window.innerWidth * 0.46), Math.round(window.innerHeight * 0.35)],
-        [Math.round(window.innerWidth * 0.46), Math.round(window.innerHeight * 0.5)],
-        [Math.round(window.innerWidth * 0.46), Math.round(window.innerHeight * 0.65)]
-      ];
-    } else {
+    const profile = state.siteProfile || resolveSiteProfile();
+    let points = selectorList(profile.viewportPoints).map((pair) => [
+      Math.round(window.innerWidth * pair[0]),
+      Math.round(window.innerHeight * pair[1])
+    ]);
+
+    if (!points.length) {
       points = [
         [Math.round(window.innerWidth / 2), Math.round(window.innerHeight * state.settings.centerBias)],
         [Math.round(window.innerWidth * 0.56), Math.round(window.innerHeight * 0.42)],
@@ -544,6 +661,12 @@
 
     const target = bestFromPoints(points, 'scroll');
     if (target) return target;
+    for (const selector of selectorList(profile.fallbackSelectors)) {
+      try {
+        const found = document.querySelector(selector);
+        if (found) return found;
+      } catch (_) {}
+    }
     return document.querySelector('article, main, [role="article"], [role="main"], tr.zA, .ii.gt, .adn.ads') || null;
   }
 
@@ -564,7 +687,7 @@
   }
 
   function focusElement(el, pinned = false) {
-    if (!shouldRun() || !el) return;
+    if (!canManualRun() || !el) return;
     const rect = elementRect(el);
     if (!rect) return;
     state.pinned = !!pinned;
@@ -611,7 +734,7 @@
 
   function scheduleHoverFocus() {
     clearTimeout(state.hoverTimer);
-    if (!shouldRun() || !state.settings.autoOnHover || state.pinned) return;
+    if (!canAutoRun() || !state.settings.autoOnHover || state.pinned) return;
     if (!state.hasUserInteracted || !state.hasHoverIntent) return;
     state.hoverTimer = setTimeout(() => {
       const inactiveFor = Date.now() - state.lastPointerMoveAt;
@@ -623,7 +746,7 @@
 
   function scheduleScrollFocus() {
     clearTimeout(state.scrollTimer);
-    if (!shouldRun() || !state.settings.autoOnScroll || state.pinned) return;
+    if (!canAutoRun() || !state.settings.autoOnScroll || state.pinned) return;
     if (!state.hasUserInteracted || !state.hasScrollIntent) return;
     state.scrollTimer = setTimeout(() => {
       const inactiveFor = Date.now() - state.lastScrollAt;
@@ -663,7 +786,7 @@
   }
 
   function onScroll() {
-    if (!shouldRun()) return;
+    if (!canManualRun()) return;
     markInteraction('scroll');
     state.pageIntent = detectIntentProfile();
     if (state.activeElement) refreshActiveTarget();
@@ -685,7 +808,7 @@
   }
 
   function onClick(e) {
-    if (e.shiftKey && shouldRun()) {
+    if (e.shiftKey && canManualRun()) {
       const target = closestReadableCandidate(e.target, e.clientX, e.clientY, 'hover');
       if (!target) return;
       e.preventDefault();
@@ -704,7 +827,7 @@
   function applySettings(next) {
     state.settings = { ...DEFAULTS, ...next };
     applyVisualSettings();
-    if (!shouldRun()) {
+    if (!canManualRun()) {
       hideOverlay();
       clearTimeout(state.hoverTimer);
       clearTimeout(state.scrollTimer);
@@ -734,6 +857,10 @@
         ignored: domainIgnored(),
         hostname: location.hostname,
         pageIntent: state.pageIntent,
+        siteProfile: state.siteProfile?.id || 'generic',
+        siteMode: getSiteOverrideMode(),
+        autoBlockedReason: getAutoBlockReason(),
+        utilityLike: isUtilityLikePage(),
         settings: state.settings
       });
       return true;
@@ -742,6 +869,10 @@
       state.pausedForTab = !state.pausedForTab;
       if (state.pausedForTab) hideOverlay();
       sendResponse({ pausedForTab: state.pausedForTab });
+      return true;
+    }
+    if (message.type === 'UMBRA_SET_SITE_MODE') {
+      sendResponse({ ok: true, siteMode: getSiteOverrideMode() });
       return true;
     }
     if (message.type === 'UMBRA_FOCUS_NOW') {
