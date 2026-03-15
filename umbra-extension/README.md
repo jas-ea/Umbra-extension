@@ -40,7 +40,7 @@ The site profile registry lives in `site-profiles.js`.
 A site profile declares things like:
 
 - which hosts or layouts it matches
-- what the page intent is (`gmail`, `timeline`, `article`, `generic`)
+- what the page intent is (`gmail`, `timeline`, `article`, `chat`, `comparative`, `utility`, `generic`)
 - quick selectors to snap to likely targets
 - selectors and token patterns to reject app chrome or shells
 - selectors to prefer when boosting candidates
@@ -117,6 +117,7 @@ Keep these boundaries strict:
 - Prefer selectors and small declarative profile changes over giant custom branches.
 - Reject app shells aggressively; preserve reading context conservatively.
 - A good fix keeps visible the author/sender identity, timestamp, and the primary interactive controls that belong to the focused unit.
+- Comparative pages such as market tables, screeners, leaderboards, and inbox-style lists should usually focus the whole table surface or default to Manual, not isolate single rows.
 - A bad fix focuses inner text only or balloons to the whole application shell.
 
 ## Site profiles currently included
@@ -127,6 +128,8 @@ The repo ships with starter profiles for:
 - Substack feed / notes
 - Substack article pages
 - X / Twitter
+- ChatGPT / Claude / Gemini
+- CoinGecko and comparative market-table pages
 - generic article layouts
 - generic fallback
 
@@ -189,3 +192,7 @@ A good contribution sequence is:
 4. Only change the core engine when the issue is cross-site and not site-specific.
 
 That keeps the project scalable as a public repo instead of turning `content.js` into a pile of one-off exceptions.
+
+
+## Surface-level focusing
+For article pages, timelines, Gmail, and AI chat apps, Umbra now uses `selectionModel: "surface"`. That makes it lock to the nearest whole card, message, or article surface instead of picking arbitrary inner paragraphs, code chips, or metadata fragments.

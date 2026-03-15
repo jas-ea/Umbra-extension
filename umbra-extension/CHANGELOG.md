@@ -1,3 +1,14 @@
+## 1.5.0
+- Added a new `comparative` selection model for sites where meaning comes from comparing rows and columns together, such as CoinGecko-style market tables.
+- Added site profiles for CoinGecko and a broader comparative market-table family, both defaulting to Manual so Umbra does not aggressively isolate single rows.
+- Softened the focus treatment with subtler corner radius and gentler shadowing.
+- Reduced visual jitter with overlap-based retarget hysteresis and a short hide grace period so the overlay does not flash off during small pointer exits.
+
+## 1.4.1
+- Added surface-level selection so Umbra locks to whole reading/message/card surfaces instead of drilling into inner paragraphs or chips.
+- Added site profiles for ChatGPT, Claude, and Gemini.
+- Reduced over-narrow focus inside long-form reading and AI chat pages.
+
 ## 1.4.0
 
 - Added per-site modes in the popup: Auto, Manual, and Off.

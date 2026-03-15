@@ -75,3 +75,12 @@ Every profile should now declare a `defaultMode`:
 - `off`: Umbra disabled for that site by default
 
 This is the preferred way to handle calendars, editors, dashboards, canvases, and other utility-heavy surfaces.
+
+
+### selectionModel
+Use `selectionModel: "surface"` when Umbra should focus the nearest page/app surface rather than a nested descendant. Good fits: articles, timelines, email rows/bodies, and AI chat messages.
+
+
+## Comparative pages
+
+For markets, leaderboards, screeners, or other data-dense tables, prefer `selectionModel: "comparative"`. In that mode, surface selectors should point at table-level containers, not rows. Default these sites to `manual` unless the table-level autofocus is consistently useful.

@@ -7,10 +7,12 @@
     blurPx: 2,
     paddingX: 24,
     paddingY: 20,
-    cornerRadius: 24,
-    transitionMs: 320,
+    cornerRadius: 16,
+    transitionMs: 340,
     stationaryTolerance: 10,
-    revealBuffer: 48,
+    revealBuffer: 56,
+    hideGraceMs: 120,
+    switchOverlapThreshold: 0.72,
     centerBias: 0.38,
     autoOnScroll: true,
     autoOnHover: true,
@@ -48,6 +50,8 @@
     active: false,
     hoverTimer: null,
     scrollTimer: null,
+    hideTimer: null,
+    settleTimer: null,
     pointerX: Math.round(window.innerWidth / 2),
     pointerY: Math.round(window.innerHeight / 2),
     anchorX: null,
@@ -157,7 +161,7 @@
 
   function isUtilityLikePage() {
     const profileIntent = state.siteProfile?.intent || 'generic';
-    if (profileIntent === 'article' || profileIntent === 'timeline') return false;
+    if (profileIntent === 'article' || profileIntent === 'timeline' || profileIntent === 'comparative' || profileIntent === 'chat' || profileIntent === 'gmail') return false;
     if (profileIntent === 'utility') return true;
     const stats = visibleViewportStats();
     if (stats.overlayShells >= 3 && stats.textChars < 900) return true;
@@ -190,6 +194,8 @@
       intent: 'generic',
       quickSelectors: ['article', 'main', 'section'],
       preferSelectors: ['article', 'main', 'section'],
+      surfaceSelectors: ['article', 'main', 'section', '[role="article"]', '[role="main"]'],
+      selectionModel: 'adaptive',
       rejectSelectors: ['aside', 'nav', 'header', 'footer'],
       rejectTokens: ['sidebar', 'menu', 'toolbar', 'banner', 'modal', 'dialog', 'popup', 'overlay', 'search', 'rail'],
       viewportPoints: [[0.5, 0.38], [0.56, 0.42], [0.44, 0.42], [0.5, 0.54]],
@@ -227,6 +233,35 @@
     return state.siteProfile.intent || 'generic';
   }
 
+  function selectionModel() {
+    return state.siteProfile?.selectionModel || 'adaptive';
+  }
+
+  function findIntentSurface(startNode) {
+    const profile = state.siteProfile || resolveSiteProfile();
+    const surfaces = selectorList(profile.surfaceSelectors);
+    if (surfaces.length) {
+      const hit = closestAny(startNode, surfaces);
+      if (hit) return hit;
+    }
+    if (state.pageIntent === 'gmail') {
+      return startNode.closest?.('tr.zA, .adn.ads, .ii.gt, .a3s') || null;
+    }
+    if (state.pageIntent === 'timeline') {
+      return startNode.closest?.('[data-testid="tweet"], article[role="article"], article, [role="article"]') || null;
+    }
+    if (state.pageIntent === 'chat') {
+      return startNode.closest?.('[data-message-author-role], [data-testid*="message"], article, main, .conversation, .message, [role="article"]') || null;
+    }
+    if (state.pageIntent === 'article') {
+      return startNode.closest?.('article, main, [role="article"], [role="main"]') || null;
+    }
+    if (state.pageIntent === 'comparative') {
+      return startNode.closest?.('table, [role="table"], [class*="table" i], [class*="grid" i], [data-view-component="true"] table') || null;
+    }
+    return startNode.closest?.('article, main, section, table, [role="article"], [role="main"], [role="table"]') || null;
+  }
+
   function injectUi() {
     if (state.mounted) return;
     const host = document.createElement('div');
@@ -244,8 +279,8 @@
         #umbra-root {
           --umbra-opacity: 0.62;
           --umbra-blur: 2px;
-          --umbra-transition: 320ms;
-          --umbra-radius: 24px;
+          --umbra-transition: 340ms;
+          --umbra-radius: 16px;
           position: fixed;
           inset: 0;
           pointer-events: none;
@@ -272,8 +307,8 @@
           background: transparent;
           border-radius: var(--umbra-radius);
           box-shadow:
-            0 0 0 1px rgba(255,255,255,0.22),
-            0 16px 48px rgba(0,0,0,0.18),
+            0 0 0 1px rgba(255,255,255,0.18),
+            0 12px 32px rgba(0,0,0,0.14),
             inset 0 0 0 1px rgba(255,255,255,0.03);
         }
         .label {
@@ -282,7 +317,7 @@
           left: auto;
           width: auto;
           height: auto;
-          transform: translateY(-4px);
+          transform: translateY(-3px);
           padding: 7px 10px;
           border-radius: 999px;
           background: rgba(10,10,12,0.76);
@@ -456,6 +491,14 @@
       if (/article|story|post|content|prose|markdown/.test(cls)) boost += 12;
       return boost + profileBoost;
     }
+    if (state.pageIntent === 'comparative') {
+      let boost = 0;
+      if (el.matches?.('table, [role="table"], thead, tbody')) boost += 26;
+      if (el.matches?.('tr, [role="row"]')) boost -= 34;
+      if (/table|grid|market|screener|ranking|leaderboard|list/.test(cls)) boost += 12;
+      if (/row|cell/.test(cls)) boost -= 10;
+      return boost + profileBoost;
+    }
     return profileBoost;
   }
 
@@ -481,6 +524,17 @@
     const meta = metaCount(el);
     const tag = el.tagName.toLowerCase();
     const textDensity = textLen / Math.max(1, area / 1000);
+    const surface = findIntentSurface(el);
+    let depthPenalty = 0;
+    if (surface && surface !== el) {
+      let cursor = el;
+      let depth = 0;
+      while (cursor && cursor !== surface && depth < 10) {
+        cursor = cursor.parentElement;
+        depth += 1;
+      }
+      depthPenalty = depth;
+    }
 
     let score = 0;
     score += Math.min(textLen / 55, 36);
@@ -507,6 +561,13 @@
     if (r.height > window.innerHeight * 0.92) score -= 14;
 
     if (looksLikeShell(el)) score -= 20;
+    if (selectionModel() === 'surface' && depthPenalty > 0) score -= Math.min(20, depthPenalty * 6);
+    if (selectionModel() === 'comparative') {
+      if (el.matches?.('tr, td, th, [role="row"], [role="cell"], [role="gridcell"]')) score -= 42;
+      if (el.matches?.('table, [role="table"], tbody, thead')) score += 24;
+      if (interactive > 20) score -= 10;
+      if (blocks > 12 && textLen < 280) score += 6;
+    }
 
     const cx = r.left + r.width / 2;
     const cy = r.top + r.height / 2;
@@ -519,6 +580,8 @@
     }
 
     score += siteSpecificBoost(el);
+    if (selectionModel() === 'surface' && surface === el) score += 18;
+    if (selectionModel() === 'comparative' && surface === el) score += 22;
     return score;
   }
 
@@ -581,6 +644,9 @@
         if (/carousel|suggestion|recommend/.test(cls)) contextScore -= 10;
       } else if (state.pageIntent === 'article') {
         if (node.matches?.('article, main')) contextScore += 14;
+      } else if (state.pageIntent === 'comparative') {
+        if (node.matches?.('table, [role="table"], tbody, thead')) contextScore += 20;
+        if (node.matches?.('tr, [role="row"]')) contextScore -= 20;
       }
 
       if (contextScore > 10) chosen = node;
@@ -594,15 +660,27 @@
   function closestReadableCandidate(startNode, sourceX, sourceY, sourceKind = 'hover') {
     if (!startNode) return null;
 
+    const model = selectionModel();
+    const surface = findIntentSurface(startNode);
+
     if (state.pageIntent === 'gmail') {
       const gmailQuick = startNode.closest?.('tr.zA, .ii.gt, .a3s, .adn.ads');
+      if (gmailQuick && model === 'surface') return expandCandidateWithContext(gmailQuick);
       if (gmailQuick) return gmailQuick;
+    }
+    if (state.pageIntent === 'comparative') {
+      const comparativeQuick = startNode.closest?.('table, [role="table"], tbody, thead, [class*="table" i], [class*="grid" i]');
+      if (comparativeQuick) return expandCandidateWithContext(comparativeQuick);
     }
 
     const profile = state.siteProfile || resolveSiteProfile();
-    const quickHit = closestAny(startNode, profile.quickSelectors) || startNode.closest?.('[data-testid="tweet"], article[role="article"], article, [role="main"], main');
-    const quickScore = quickHit ? scoreCandidate(quickHit, sourceX, sourceY, sourceKind) : -Infinity;
+    const quickHit = surface || closestAny(startNode, profile.quickSelectors) || startNode.closest?.('[data-testid="tweet"], article[role="article"], article, [role="main"], main');
 
+    if (model === 'surface' && quickHit) {
+      return expandCandidateWithContext(quickHit);
+    }
+
+    const quickScore = quickHit ? scoreCandidate(quickHit, sourceX, sourceY, sourceKind) : -Infinity;
     let best = quickScore > 0 ? quickHit : null;
     let bestScore = quickScore;
 
@@ -615,7 +693,7 @@
     }
 
     if (!best && startNode.closest) {
-      const profileFallback = closestAny(startNode, profile.fallbackSelectors);
+      const profileFallback = surface || closestAny(startNode, profile.fallbackSelectors);
       best = profileFallback || startNode.closest('article, main, section, div, tr');
     }
 
@@ -667,7 +745,38 @@
         if (found) return found;
       } catch (_) {}
     }
-    return document.querySelector('article, main, [role="article"], [role="main"], tr.zA, .ii.gt, .adn.ads') || null;
+    return document.querySelector('article, main, [role="article"], [role="main"], table, [role="table"], tr.zA, .ii.gt, .adn.ads') || null;
+  }
+
+
+  function rectArea(rect) {
+    return Math.max(0, rect.right - rect.left) * Math.max(0, rect.bottom - rect.top);
+  }
+
+  function rectOverlapRatio(a, b) {
+    if (!a || !b) return 0;
+    const left = Math.max(a.left, b.left);
+    const right = Math.min(a.right, b.right);
+    const top = Math.max(a.top, b.top);
+    const bottom = Math.min(a.bottom, b.bottom);
+    const intersection = Math.max(0, right - left) * Math.max(0, bottom - top);
+    if (!intersection) return 0;
+    return intersection / Math.max(1, Math.min(rectArea(a), rectArea(b)));
+  }
+
+  function scheduleHideOverlay() {
+    clearTimeout(state.hideTimer);
+    state.hideTimer = setTimeout(() => {
+      if (!state.pinned) hideOverlay();
+    }, state.settings.hideGraceMs || 120);
+  }
+
+  function shouldKeepCurrentFocus(nextEl) {
+    if (!state.activeElement || !state.activeRect || !nextEl) return false;
+    if (nextEl === state.activeElement || state.activeElement.contains?.(nextEl) || nextEl.contains?.(state.activeElement)) return true;
+    const nextRect = elementRect(nextEl);
+    if (!nextRect) return false;
+    return rectOverlapRatio(state.activeRect, nextRect) >= (state.settings.switchOverlapThreshold || 0.72);
   }
 
   function renderRect(rect) {
@@ -682,7 +791,10 @@
     Object.assign(state.masks.right.style, { top: `${top}px`, left: `${right}px`, width: `${Math.max(0, w - right)}px`, height: `${Math.max(0, bottom - top)}px` });
     Object.assign(state.masks.outline.style, { top: `${top}px`, left: `${left}px`, width: `${Math.max(0, right - left)}px`, height: `${Math.max(0, bottom - top)}px` });
 
+    state.root.classList.remove('settled');
     state.root.classList.add('visible');
+    clearTimeout(state.settleTimer);
+    state.settleTimer = setTimeout(() => state.root?.classList.add('settled'), 90);
     state.active = true;
   }
 
@@ -740,7 +852,7 @@
       const inactiveFor = Date.now() - state.lastPointerMoveAt;
       if (inactiveFor + 8 < state.settings.dwellMs) return;
       const target = targetFromPoint(state.pointerX, state.pointerY);
-      if (target) focusElement(target, false);
+      if (target && !shouldKeepCurrentFocus(target)) focusElement(target, false);
     }, state.settings.dwellMs);
   }
 
@@ -752,7 +864,7 @@
       const inactiveFor = Date.now() - state.lastScrollAt;
       if (inactiveFor + 8 < state.settings.scrollIdleMs) return;
       const target = targetFromViewportCenter();
-      if (target) focusElement(target, false);
+      if (target && !shouldKeepCurrentFocus(target)) focusElement(target, false);
     }, state.settings.scrollIdleMs);
   }
 
@@ -778,7 +890,7 @@
             e.clientX <= r.right + state.settings.revealBuffer &&
             e.clientY >= r.top - state.settings.revealBuffer &&
             e.clientY <= r.bottom + state.settings.revealBuffer;
-          if (!inside) hideOverlay();
+          if (!inside) scheduleHideOverlay();
         }
         scheduleHoverFocus();
       }
