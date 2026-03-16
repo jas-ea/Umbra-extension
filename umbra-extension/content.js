@@ -61,7 +61,7 @@
     host: null,
     shadow: null,
     root: null,
-    masks: null,
+    focusShell: null,
     mounted: false,
     hasUserInteracted: false,
     hasHoverIntent: false,
@@ -70,7 +70,9 @@
     lastPointerMoveAt: 0,
     lastScrollAt: 0,
     pageIntent: 'generic',
-    siteProfile: null
+    siteProfile: null,
+    interactionLockEl: null,
+    interactionLockTimer: null
   };
 
   const storage = chrome.storage.sync;
@@ -278,15 +280,14 @@
         :host { all: initial; }
         #umbra-root {
           --umbra-opacity: 0.62;
-          --umbra-blur: 2px;
           --umbra-transition: 340ms;
-          --umbra-radius: 16px;
+          --umbra-radius: 12px;
           position: fixed;
           inset: 0;
           pointer-events: none;
           font-family: Inter, ui-sans-serif, system-ui, sans-serif;
         }
-        .mask, .outline, .label {
+        .focus-shell, .label {
           position: fixed;
           opacity: 0;
           transition:
@@ -295,21 +296,19 @@
             left var(--umbra-transition) ease,
             width var(--umbra-transition) ease,
             height var(--umbra-transition) ease,
-            transform var(--umbra-transition) ease;
-          will-change: top, left, width, height, opacity;
+            transform var(--umbra-transition) ease,
+            box-shadow var(--umbra-transition) ease,
+            border-radius var(--umbra-transition) ease;
+          will-change: top, left, width, height, opacity, box-shadow, border-radius;
         }
-        .mask {
-          background: rgba(12, 12, 16, var(--umbra-opacity));
-          backdrop-filter: blur(var(--umbra-blur));
-          -webkit-backdrop-filter: blur(var(--umbra-blur));
-        }
-        .outline {
+        .focus-shell {
           background: transparent;
           border-radius: var(--umbra-radius);
           box-shadow:
-            0 0 0 1px rgba(255,255,255,0.18),
-            0 12px 32px rgba(0,0,0,0.14),
-            inset 0 0 0 1px rgba(255,255,255,0.03);
+            0 0 0 9999px rgba(12, 12, 16, var(--umbra-opacity)),
+            0 0 0 1px rgba(255,255,255,0.12),
+            0 10px 28px rgba(0,0,0,0.12),
+            inset 0 0 0 1px rgba(255,255,255,0.02);
         }
         .label {
           top: 14px;
@@ -329,21 +328,18 @@
           backdrop-filter: blur(8px);
           -webkit-backdrop-filter: blur(8px);
         }
-        #umbra-root.visible .mask,
-        #umbra-root.visible .outline,
+        #umbra-root.visible .focus-shell,
         #umbra-root.visible .label {
           opacity: 1;
           transform: translateY(0);
         }
-        #umbra-root:not(.show-outline) .outline { opacity: 0 !important; }
+        #umbra-root:not(.show-outline) .focus-shell {
+          box-shadow: 0 0 0 9999px rgba(12, 12, 16, var(--umbra-opacity));
+        }
         #umbra-root:not(.show-label) .label { display: none; }
       </style>
       <div id="umbra-root" class="show-outline">
-        <div class="mask" data-part="top"></div>
-        <div class="mask" data-part="left"></div>
-        <div class="mask" data-part="right"></div>
-        <div class="mask" data-part="bottom"></div>
-        <div class="outline"></div>
+        <div class="focus-shell"></div>
         <div class="label">Umbra active</div>
       </div>
     `;
@@ -352,13 +348,7 @@
     state.host = host;
     state.shadow = shadow;
     state.root = shadow.getElementById('umbra-root');
-    state.masks = {
-      top: shadow.querySelector('[data-part="top"]'),
-      left: shadow.querySelector('[data-part="left"]'),
-      right: shadow.querySelector('[data-part="right"]'),
-      bottom: shadow.querySelector('[data-part="bottom"]'),
-      outline: shadow.querySelector('.outline')
-    };
+    state.focusShell = shadow.querySelector('.focus-shell');
     state.label = shadow.querySelector('.label');
     state.mounted = true;
     applyVisualSettings();
@@ -367,7 +357,6 @@
   function applyVisualSettings() {
     if (!state.root) return;
     state.root.style.setProperty('--umbra-opacity', String(state.settings.overlayOpacity));
-    state.root.style.setProperty('--umbra-blur', `${state.settings.blurPx}px`);
     state.root.style.setProperty('--umbra-transition', `${state.settings.transitionMs}ms`);
     state.root.style.setProperty('--umbra-radius', `${state.settings.cornerRadius}px`);
     state.root.classList.toggle('show-outline', !!state.settings.showOutline);
@@ -378,6 +367,7 @@
       else if (reason === 'site-manual') state.label.textContent = 'Manual mode';
       else if (reason === 'site-off') state.label.textContent = 'Off on this site';
       else if (reason === 'utility-page') state.label.textContent = 'Utility app detected';
+      else if (state.interactionLockEl) state.label.textContent = 'Interaction mode';
       else state.label.textContent = 'Umbra active';
     }
   }
@@ -660,6 +650,11 @@
   function closestReadableCandidate(startNode, sourceX, sourceY, sourceKind = 'hover') {
     if (!startNode) return null;
 
+    const lockedInteractiveSurface = state.interactionLockEl && document.contains(state.interactionLockEl) ? findInteractionSurface(state.interactionLockEl) : null;
+    if (lockedInteractiveSurface) return lockedInteractiveSurface;
+    const localInteractiveSurface = findInteractionSurface(startNode);
+    if (localInteractiveSurface && (isInteractiveEngaged() || startNode.closest?.(INTERACTIVE_SELECTOR))) return localInteractiveSurface;
+
     const model = selectionModel();
     const surface = findIntentSurface(startNode);
 
@@ -723,6 +718,8 @@
 
   function targetFromViewportCenter() {
     const profile = state.siteProfile || resolveSiteProfile();
+    const interactionSurface = state.interactionLockEl && document.contains(state.interactionLockEl) ? findInteractionSurface(state.interactionLockEl) : null;
+    if (interactionSurface) return interactionSurface;
     let points = selectorList(profile.viewportPoints).map((pair) => [
       Math.round(window.innerWidth * pair[0]),
       Math.round(window.innerHeight * pair[1])
@@ -764,6 +761,34 @@
     return intersection / Math.max(1, Math.min(rectArea(a), rectArea(b)));
   }
 
+  function isEditableElement(el) {
+    if (!el || el.nodeType !== 1) return false;
+    if (el.matches?.('textarea, select, input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="button"]):not([type="submit"])')) return true;
+    if (el.isContentEditable || el.matches?.('[contenteditable="true"], [role="textbox"], [role="searchbox"]')) return true;
+    return false;
+  }
+
+  function isInteractiveEngaged() {
+    const active = document.activeElement;
+    return !!(active && active !== document.body && isEditableElement(active));
+  }
+
+  function findInteractionSurface(startNode) {
+    if (!startNode || !startNode.closest) return null;
+    const selectors = [
+      'form', '[role="dialog"]', '[aria-modal="true"]', '[data-testid*="composer"]',
+      '[data-testid*="reply"]', '[data-testid*="toolBar"]', '[data-testid*="tweetTextarea"]',
+      '[data-testid*="inline_reply"]', '[data-testid*="DMComposer"]', '.composer', '.editor', '.toolbar',
+      '[class*="composer" i]', '[class*="editor" i]', '[class*="reply" i]', '[class*="toolbar" i]'
+    ];
+    const surface = closestAny(startNode, selectors);
+    if (!surface) return null;
+    const rect = surface.getBoundingClientRect();
+    const areaRatio = (rect.width * rect.height) / Math.max(1, window.innerWidth * window.innerHeight);
+    if (areaRatio > 0.88) return null;
+    return expandCandidateWithContext(surface);
+  }
+
   function scheduleHideOverlay() {
     clearTimeout(state.hideTimer);
     state.hideTimer = setTimeout(() => {
@@ -773,6 +798,7 @@
 
   function shouldKeepCurrentFocus(nextEl) {
     if (!state.activeElement || !state.activeRect || !nextEl) return false;
+    if (state.interactionLockEl && state.activeElement.contains?.(state.interactionLockEl)) return true;
     if (nextEl === state.activeElement || state.activeElement.contains?.(nextEl) || nextEl.contains?.(state.activeElement)) return true;
     const nextRect = elementRect(nextEl);
     if (!nextRect) return false;
@@ -781,15 +807,12 @@
 
   function renderRect(rect) {
     injectUi();
-    const w = window.innerWidth;
-    const h = window.innerHeight;
-    const { top, left, right, bottom } = rect;
-
-    Object.assign(state.masks.top.style, { top: '0px', left: '0px', width: `${w}px`, height: `${top}px` });
-    Object.assign(state.masks.bottom.style, { top: `${bottom}px`, left: '0px', width: `${w}px`, height: `${Math.max(0, h - bottom)}px` });
-    Object.assign(state.masks.left.style, { top: `${top}px`, left: '0px', width: `${left}px`, height: `${Math.max(0, bottom - top)}px` });
-    Object.assign(state.masks.right.style, { top: `${top}px`, left: `${right}px`, width: `${Math.max(0, w - right)}px`, height: `${Math.max(0, bottom - top)}px` });
-    Object.assign(state.masks.outline.style, { top: `${top}px`, left: `${left}px`, width: `${Math.max(0, right - left)}px`, height: `${Math.max(0, bottom - top)}px` });
+    Object.assign(state.focusShell.style, {
+      top: `${rect.top}px`,
+      left: `${rect.left}px`,
+      width: `${Math.max(0, rect.right - rect.left)}px`,
+      height: `${Math.max(0, rect.bottom - rect.top)}px`
+    });
 
     state.root.classList.remove('settled');
     state.root.classList.add('visible');
@@ -897,6 +920,29 @@
     }
   }
 
+  function onFocusIn(e) {
+    const target = e.target;
+    if (!isEditableElement(target)) return;
+    state.interactionLockEl = target;
+    clearTimeout(state.interactionLockTimer);
+    hideOverlay();
+    const surface = findInteractionSurface(target);
+    if (surface && canManualRun()) {
+      focusElement(surface, false);
+    }
+    applyVisualSettings();
+  }
+
+  function onFocusOut() {
+    clearTimeout(state.interactionLockTimer);
+    state.interactionLockTimer = setTimeout(() => {
+      if (!isInteractiveEngaged()) {
+        state.interactionLockEl = null;
+        applyVisualSettings();
+      }
+    }, 140);
+  }
+
   function onScroll() {
     if (!canManualRun()) return;
     markInteraction('scroll');
@@ -931,7 +977,9 @@
     }
 
     if (e.target.closest?.(INTERACTIVE_SELECTOR)) {
-      hideOverlay();
+      const surface = findInteractionSurface(e.target);
+      if (surface && canManualRun()) focusElement(surface, false);
+      else hideOverlay();
       markInteraction('hover');
     }
   }
@@ -1015,6 +1063,8 @@
     window.addEventListener('resize', onResize, { passive: true });
     window.addEventListener('keydown', onKeyDown, true);
     window.addEventListener('click', onClick, true);
+    window.addEventListener('focusin', onFocusIn, true);
+    window.addEventListener('focusout', onFocusOut, true);
   }
 
   syncSettings().then((items) => {

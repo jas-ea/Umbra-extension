@@ -44,7 +44,7 @@ The current extension source lives in the `umbra-extension` folder in this repos
   - Scores candidates based on text length, paragraphs, images, links, and viewport coverage.  
   - Prefers tweet-like and article-like containers on sites that expose semantic attributes.  
   - Chooses the best match and computes a padded rectangle around it.
-- An overlay of four dark masks and a highlighted outline is positioned around that rectangle, leaving only the focused block in normal brightness.
+- A single rounded focus shell overlay is positioned around that rectangle, leaving only the focused block in normal brightness.
 - As you scroll or resize, the highlight tracks the same target element until you move far enough away, at which point the intent model restarts.
 
 All state (such as dwell time and overlay opacity) is stored with `chrome.storage.sync`, so your settings follow you across Chrome profiles where sync is enabled.

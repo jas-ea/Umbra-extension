@@ -17,7 +17,7 @@ It activates only after one of these patterns:
 - hover intent: the mouse settles over a region for the dwell duration
 - scroll intent: the user scrolls, then stops long enough for a stable reading target to emerge
 
-It then renders four masks around the chosen region inside a shadow DOM overlay so page CSS collisions are minimized.
+It then renders a single rounded focus shell around the chosen region inside a shadow DOM overlay so page CSS collisions are minimized.
 
 ## Architecture
 
@@ -196,3 +196,7 @@ That keeps the project scalable as a public repo instead of turning `content.js`
 
 ## Surface-level focusing
 For article pages, timelines, Gmail, and AI chat apps, Umbra now uses `selectionModel: "surface"`. That makes it lock to the nearest whole card, message, or article surface instead of picking arbitrary inner paragraphs, code chips, or metadata fragments.
+
+
+## Interaction-first principle
+When a page shifts from reading to doing, Umbra should not crop controls away. The engine now treats active editing/composer regions as higher priority than passive reading blocks and expands to the nearest interaction surface when possible. If no clean interaction surface exists, it suppresses the spotlight rather than interfering.

@@ -45,3 +45,8 @@
 ## 1.2.0
 
 - Productized the original prototype into Umbra with popup controls, tab pause, site ignore, pinning, docs, and icon assets.
+
+## 1.5.1
+- Replaced four-mask spotlight with a single rounded focus shell, eliminating the double-layer edge artifact.
+- Added interaction-mode: when the user is typing or editing, Umbra expands to the nearest composer/form surface or gets out of the way.
+- Improved click/focus behavior on reply composers and other interactive surfaces.
