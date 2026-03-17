@@ -1,7 +1,7 @@
 const DEFAULTS = {
   enabled: true,
-  dwellMs: 1800,
-  scrollIdleMs: 300,
+  dwellMs: 1400,
+  scrollIdleMs: 420,
   overlayOpacity: 0.62,
   blurPx: 2,
   paddingX: 24,

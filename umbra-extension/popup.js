@@ -1,6 +1,6 @@
 const DEFAULTS = {
   enabled: true,
-  dwellMs: 1800,
+  dwellMs: 1400,
   overlayOpacity: 0.62,
   ignoreDomains: [],
   siteOverrides: {}

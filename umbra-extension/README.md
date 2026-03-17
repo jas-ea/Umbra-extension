@@ -200,3 +200,10 @@ For article pages, timelines, Gmail, and AI chat apps, Umbra now uses `selection
 
 ## Interaction-first principle
 When a page shifts from reading to doing, Umbra should not crop controls away. The engine now treats active editing/composer regions as higher priority than passive reading blocks and expands to the nearest interaction surface when possible. If no clean interaction surface exists, it suppresses the spotlight rather than interfering.
+
+
+## Pointer-first rule engine
+
+Umbra 1.6 moves the engine back to its primary invariant: pointer location and dwell are the default truth for passive reading. Composer and action surfaces can temporarily override that only after real activity such as typing, clicking, or focus entry, and those overrides decay quickly.
+
+The engine now also attaches observers to the active surface so growing composers, closing popups, and layout shifts can update the focus shell without waiting for a new hover cycle.

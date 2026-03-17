@@ -1,22 +1,26 @@
 (() => {
   const DEFAULTS = {
     enabled: true,
-    dwellMs: 1800,
-    scrollIdleMs: 300,
+    dwellMs: 1400,
+    scrollIdleMs: 420,
     overlayOpacity: 0.62,
     blurPx: 2,
     paddingX: 24,
     paddingY: 20,
     cornerRadius: 16,
-    transitionMs: 340,
+    transitionMs: 240,
     stationaryTolerance: 10,
     revealBuffer: 56,
-    hideGraceMs: 120,
+    hideGraceMs: 90,
     switchOverlapThreshold: 0.72,
     centerBias: 0.38,
     autoOnScroll: true,
     autoOnHover: true,
     showOutline: true,
+    actionLockMs: 1200,
+    composerExitMs: 70,
+    pointerPriorityMs: 260,
+    overlayTrackDebounceMs: 32,
     ignoreDomains: [],
     siteOverrides: {},
     appAutoSuppress: true,
@@ -72,7 +76,15 @@
     pageIntent: 'generic',
     siteProfile: null,
     interactionLockEl: null,
-    interactionLockTimer: null
+    interactionLockTimer: null,
+    actionUntil: 0,
+    lastKeyAt: 0,
+    lastClickAt: 0,
+    lastHoverTargetAt: 0,
+    lastFocusedEditableAt: 0,
+    resizeObserver: null,
+    mutationObserver: null,
+    rafRefresh: 0
   };
 
   const storage = chrome.storage.sync;
@@ -130,6 +142,30 @@
 
   function distance(ax, ay, bx, by) {
     return Math.hypot(ax - bx, ay - by);
+  }
+
+  function nowTs() {
+    return Date.now();
+  }
+
+  function isActionLockActive() {
+    return !!(state.interactionLockEl && document.contains(state.interactionLockEl) && nowTs() < state.actionUntil);
+  }
+
+  function extendActionLock(sourceEl, ms = state.settings.actionLockMs || 1200) {
+    if (!sourceEl) return;
+    state.interactionLockEl = sourceEl;
+    state.actionUntil = nowTs() + ms;
+  }
+
+  function pointerDominatesCurrentAction() {
+    if (!isActionLockActive()) return true;
+    const pointerTarget = document.elementFromPoint(state.pointerX, state.pointerY);
+    if (!pointerTarget) return false;
+    const surface = findInteractionSurface(state.interactionLockEl);
+    if (!surface) return true;
+    if (surface.contains(pointerTarget)) return false;
+    return nowTs() - state.lastPointerMoveAt > (state.settings.pointerPriorityMs || 260);
   }
 
   function pageHost() {
@@ -650,8 +686,8 @@
   function closestReadableCandidate(startNode, sourceX, sourceY, sourceKind = 'hover') {
     if (!startNode) return null;
 
-    const lockedInteractiveSurface = state.interactionLockEl && document.contains(state.interactionLockEl) ? findInteractionSurface(state.interactionLockEl) : null;
-    if (lockedInteractiveSurface) return lockedInteractiveSurface;
+    const lockedInteractiveSurface = isActionLockActive() && state.interactionLockEl && document.contains(state.interactionLockEl) ? findInteractionSurface(state.interactionLockEl) : null;
+    if (lockedInteractiveSurface && !pointerDominatesCurrentAction()) return lockedInteractiveSurface;
     const localInteractiveSurface = findInteractionSurface(startNode);
     if (localInteractiveSurface && (isInteractiveEngaged() || startNode.closest?.(INTERACTIVE_SELECTOR))) return localInteractiveSurface;
 
@@ -718,8 +754,8 @@
 
   function targetFromViewportCenter() {
     const profile = state.siteProfile || resolveSiteProfile();
-    const interactionSurface = state.interactionLockEl && document.contains(state.interactionLockEl) ? findInteractionSurface(state.interactionLockEl) : null;
-    if (interactionSurface) return interactionSurface;
+    const interactionSurface = isActionLockActive() && state.interactionLockEl && document.contains(state.interactionLockEl) ? findInteractionSurface(state.interactionLockEl) : null;
+    if (interactionSurface && !pointerDominatesCurrentAction()) return interactionSurface;
     let points = selectorList(profile.viewportPoints).map((pair) => [
       Math.round(window.innerWidth * pair[0]),
       Math.round(window.innerHeight * pair[1])
@@ -789,6 +825,40 @@
     return expandCandidateWithContext(surface);
   }
 
+  function cancelRefreshFrame() {
+    if (state.rafRefresh) cancelAnimationFrame(state.rafRefresh);
+    state.rafRefresh = 0;
+  }
+
+  function scheduleRefreshActiveTarget() {
+    if (!state.activeElement) return;
+    cancelRefreshFrame();
+    state.rafRefresh = requestAnimationFrame(() => {
+      state.rafRefresh = 0;
+      refreshActiveTarget();
+    });
+  }
+
+  function attachSurfaceObservers(el) {
+    if (state.resizeObserver) state.resizeObserver.disconnect();
+    if (state.mutationObserver) state.mutationObserver.disconnect();
+    if (!el || !document.contains(el)) return;
+    const host = el.parentElement || el;
+    state.resizeObserver = new ResizeObserver(() => scheduleRefreshActiveTarget());
+    state.resizeObserver.observe(el);
+    if (host && host !== el) state.resizeObserver.observe(host);
+    state.mutationObserver = new MutationObserver(() => scheduleRefreshActiveTarget());
+    state.mutationObserver.observe(host, {childList: true, subtree: true, attributes: true, characterData: true});
+  }
+
+  function detachSurfaceObservers() {
+    if (state.resizeObserver) state.resizeObserver.disconnect();
+    if (state.mutationObserver) state.mutationObserver.disconnect();
+    state.resizeObserver = null;
+    state.mutationObserver = null;
+    cancelRefreshFrame();
+  }
+
   function scheduleHideOverlay() {
     clearTimeout(state.hideTimer);
     state.hideTimer = setTimeout(() => {
@@ -798,7 +868,7 @@
 
   function shouldKeepCurrentFocus(nextEl) {
     if (!state.activeElement || !state.activeRect || !nextEl) return false;
-    if (state.interactionLockEl && state.activeElement.contains?.(state.interactionLockEl)) return true;
+    if (isActionLockActive() && state.interactionLockEl && state.activeElement.contains?.(state.interactionLockEl) && !pointerDominatesCurrentAction()) return true;
     if (nextEl === state.activeElement || state.activeElement.contains?.(nextEl) || nextEl.contains?.(state.activeElement)) return true;
     const nextRect = elementRect(nextEl);
     if (!nextRect) return false;
@@ -828,6 +898,7 @@
     state.pinned = !!pinned;
     state.activeElement = el;
     state.activeRect = rect;
+    attachSurfaceObservers(el);
     applyVisualSettings();
     renderRect(rect);
   }
@@ -835,8 +906,10 @@
   function refreshActiveTarget() {
     if (!state.activeElement) return;
     if (!document.contains(state.activeElement)) {
+      const fallback = (state.activeRect && targetFromPoint(state.pointerX, state.pointerY)) || null;
       state.pinned = false;
       hideOverlay();
+      if (fallback && canManualRun()) focusElement(fallback, false);
       return;
     }
     const rect = elementRect(state.activeElement);
@@ -860,6 +933,7 @@
     if (kind === 'hover') {
       state.hasHoverIntent = true;
       state.lastPointerMoveAt = now;
+      state.lastHoverTargetAt = now;
     }
     if (kind === 'scroll') {
       state.hasScrollIntent = true;
@@ -875,7 +949,10 @@
       const inactiveFor = Date.now() - state.lastPointerMoveAt;
       if (inactiveFor + 8 < state.settings.dwellMs) return;
       const target = targetFromPoint(state.pointerX, state.pointerY);
-      if (target && !shouldKeepCurrentFocus(target)) focusElement(target, false);
+      if (target && !shouldKeepCurrentFocus(target)) {
+        if (pointerDominatesCurrentAction()) state.interactionLockEl = null;
+        focusElement(target, false);
+      }
     }, state.settings.dwellMs);
   }
 
@@ -886,7 +963,8 @@
     state.scrollTimer = setTimeout(() => {
       const inactiveFor = Date.now() - state.lastScrollAt;
       if (inactiveFor + 8 < state.settings.scrollIdleMs) return;
-      const target = targetFromViewportCenter();
+      const pointerTarget = targetFromPoint(state.pointerX, state.pointerY);
+      const target = pointerTarget || targetFromViewportCenter();
       if (target && !shouldKeepCurrentFocus(target)) focusElement(target, false);
     }, state.settings.scrollIdleMs);
   }
@@ -906,6 +984,10 @@
       state.anchorX = e.clientX;
       state.anchorY = e.clientY;
       markInteraction('hover');
+      if (isActionLockActive() && pointerDominatesCurrentAction()) {
+        state.actionUntil = 0;
+        state.interactionLockEl = null;
+      }
       if (!state.pinned) {
         if (state.activeRect) {
           const r = state.activeRect;
@@ -923,12 +1005,16 @@
   function onFocusIn(e) {
     const target = e.target;
     if (!isEditableElement(target)) return;
-    state.interactionLockEl = target;
+    state.lastFocusedEditableAt = nowTs();
+    extendActionLock(target, state.settings.actionLockMs || 1200);
     clearTimeout(state.interactionLockTimer);
-    hideOverlay();
     const surface = findInteractionSurface(target);
-    if (surface && canManualRun()) {
+    const pointerInside = surface ? surface.contains(document.elementFromPoint(state.pointerX, state.pointerY)) : false;
+    if (surface && canManualRun() && pointerInside) {
+      hideOverlay();
       focusElement(surface, false);
+    } else {
+      hideOverlay();
     }
     applyVisualSettings();
   }
@@ -937,10 +1023,13 @@
     clearTimeout(state.interactionLockTimer);
     state.interactionLockTimer = setTimeout(() => {
       if (!isInteractiveEngaged()) {
+        state.actionUntil = 0;
         state.interactionLockEl = null;
         applyVisualSettings();
+        const target = targetFromPoint(state.pointerX, state.pointerY);
+        if (target && canAutoRun()) focusElement(target, false);
       }
-    }, 140);
+    }, state.settings.composerExitMs || 70);
   }
 
   function onScroll() {
@@ -958,6 +1047,12 @@
   }
 
   function onKeyDown(e) {
+    if (isEditableElement(e.target)) {
+      state.lastKeyAt = nowTs();
+      extendActionLock(e.target, state.settings.actionLockMs || 1200);
+      const surface = findInteractionSurface(e.target);
+      if (surface && canManualRun()) focusElement(surface, false);
+    }
     if (e.key === 'Escape') {
       clearPin();
       hideOverlay();
@@ -977,11 +1072,21 @@
     }
 
     if (e.target.closest?.(INTERACTIVE_SELECTOR)) {
+      state.lastClickAt = nowTs();
       const surface = findInteractionSurface(e.target);
+      if (isEditableElement(e.target)) extendActionLock(e.target, state.settings.actionLockMs || 1200);
       if (surface && canManualRun()) focusElement(surface, false);
       else hideOverlay();
       markInteraction('hover');
     }
+  }
+
+  function onInput(e) {
+    if (!isEditableElement(e.target)) return;
+    extendActionLock(e.target, state.settings.actionLockMs || 1200);
+    const surface = findInteractionSurface(e.target);
+    if (surface && canManualRun()) focusElement(surface, false);
+    else scheduleRefreshActiveTarget();
   }
 
   function applySettings(next) {
@@ -1065,6 +1170,7 @@
     window.addEventListener('click', onClick, true);
     window.addEventListener('focusin', onFocusIn, true);
     window.addEventListener('focusout', onFocusOut, true);
+    window.addEventListener('input', onInput, true);
   }
 
   syncSettings().then((items) => {

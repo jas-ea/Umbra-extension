@@ -1,3 +1,11 @@
+## 1.6.0
+
+- Rebuilt the rule engine around pointer-first attention. Mouse dwell now regains priority over stale composer/input locks when the user moves away to read.
+- Added decay-based action locks so creation surfaces only dominate briefly after real activity, not merely because an input exists on the page.
+- Added live surface tracking with ResizeObserver and MutationObserver so expanding composers and closing popups reflow the focus shell more reliably.
+- Tightened exit timing for composer/input transitions and reduced lingering overlay behavior.
+- Adjusted default dwell, scroll idle, hide grace, and transition timings to feel less sticky.
+
 ## 1.5.0
 - Added a new `comparative` selection model for sites where meaning comes from comparing rows and columns together, such as CoinGecko-style market tables.
 - Added site profiles for CoinGecko and a broader comparative market-table family, both defaulting to Manual so Umbra does not aggressively isolate single rows.
