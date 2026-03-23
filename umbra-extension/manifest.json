@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Umbra",
-  "version": "1.6.0",
-  "description": "A focus overlay for the web that softly dims everything except the content block you are reading.",
+  "version": "2.0.0",
+  "description": "A pointer-first focus overlay that softly dims the web while preserving reading, comparison, and creation flows.",
   "permissions": [
     "storage",
     "activeTab",

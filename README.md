@@ -1,53 +1,37 @@
-## Umbra – Reading Spotlight for the Web
+## Umbra: Pointer-First Focus Overlay for the Web
 
-Umbra is a Chrome extension that helps you stay on a single piece of content by **dimming everything except what you are actually reading**.  
-It works well on timelines, long articles, and documentation pages where your eyes otherwise drift to sidebars, nav bars, and recommendations.
+Umbra is a Chrome extension that softly dims surrounding chrome while preserving the content block you are reading. It is designed for real browsing flows across reading, comparison (tables), and creation (composers/editors).
 
-Umbra reacts to how you actually browse: when you stop scrolling or let the mouse rest over a region, it infers the most likely reading block (a tweet, post, article body, or message) and softly darkens everything else.  
-Once it finds a good candidate, it draws a smooth spotlight around that block and darkens the rest of the viewport.
+Umbra activates only after intent is detected (hover dwell and scroll-stop) or after manual actions. When it cannot identify a trustworthy target, it fails safe by widening the focus shell or suspending auto-focus.
 
-The current extension source lives in the `umbra-extension` folder in this repository.
+Current extension source: `umbra-extension/`.
 
 ---
 
-## Features
+## Key features
 
-- **Smart reading focus**  
-  - Detects likely reading containers using layout, text density, and semantic hints.  
-  - Tuned for feeds like X (Twitter), longer posts, and article-style layouts.
-
-- **Aggressive background dimming**  
-  - Darkens the rest of the page so your current block clearly stands out.  
-  - Default overlay strength is high enough to mute distractions while keeping the page usable.
-
-- **Intent-based activation**  
-  - Hover dwell: hold the mouse still for a short dwell time and the spotlight appears.  
-  - Scroll idle: stop scrolling and Umbra focuses the most plausible reading block near the visible center.  
-  - Move away from the block or hit Escape to clear it.
-
-- **Per-tab and global controls**  
-  - Toggle the extension globally from the popup.  
-  - Pause or resume behavior on the current tab only.  
-  - Adjust dwell timing, overlay strength, padding, transition speed, and more.
-
-- **Keyboard shortcuts**  
-  - `Alt+Shift+U` pauses or resumes Umbra on the current tab.  
-  - `Alt+Shift+F` focuses the current reading block immediately.
+- Pointer-first rule stack for intent gating (hover dwell + scroll-stop)
+- Explicit selection states for reading and interaction-heavy pages (read / compare / create / act)
+- Single unified spotlight shell rendered in a shadow DOM overlay
+- Per-site mode control from the popup (Auto / Manual / Off)
+- Conservative overlay behavior with short-lived action locks and reliable reflow via `ResizeObserver` and `MutationObserver`
+- Pin / Focus / Clear controls
+  - Shift + Click pins the surface under the pointer
+  - `Alt+Shift+F` focuses now
+  - `Alt+Shift+U` pauses the current tab
+  - Escape clears the current focus
 
 ---
 
 ## How it works
 
-- A **content script** runs on each page and tracks your pointer position and scroll behavior.  
-- When the pointer stops moving for a configurable dwell time, Umbra:
-  - Finds the element under the cursor and walks its ancestors and descendants.  
-  - Scores candidates based on text length, paragraphs, images, links, and viewport coverage.  
-  - Prefers tweet-like and article-like containers on sites that expose semantic attributes.  
-  - Chooses the best match and computes a padded rectangle around it.
-- A single rounded focus shell overlay is positioned around that rectangle, leaving only the focused block in normal brightness.
-- As you scroll or resize, the highlight tracks the same target element until you move far enough away, at which point the intent model restarts.
+Umbra runs locally in a content script and follows three core stages:
 
-All state (such as dwell time and overlay opacity) is stored with `chrome.storage.sync`, so your settings follow you across Chrome profiles where sync is enabled.
+1. Intent gating (hover dwell or scroll-stop, plus manual pin/focus)
+2. Candidate selection (collect, score, reject chrome-like shells, then expand just enough context)
+3. Overlay rendering (position a single focus shell inside a shadow DOM host)
+
+Site-specific adjustments live in `site-profiles.js`, while the core engine stays generic.
 
 ---
 
@@ -60,87 +44,66 @@ All state (such as dwell time and overlay opacity) is stored with `chrome.storag
    cd Umbra-extension/umbra-extension
    ```
 
-2. In Chrome (or a Chromium-based browser that supports Manifest V3):
-   - Open `chrome://extensions`  
-   - Enable **Developer mode**  
-   - Click **Load unpacked**  
+2. In Chrome (Manifest V3 compatible):
+   - Open `chrome://extensions`
+   - Enable **Developer mode**
+   - Click **Load unpacked**
    - Select the `umbra-extension` folder
 
-3. Umbra should now appear in your extensions list and the toolbar.
+3. Umbra should appear in the extensions list and the toolbar.
 
 ---
 
 ## Using Umbra
 
-1. **Open a reading-heavy page**
-   - X / Twitter timelines or threads  
-   - News articles or long blog posts  
-   - Documentation pages with dense content
-
-2. **Hover and dwell**
-   - Move your pointer over the tweet, paragraph, or content block you want to focus on.  
-   - Hold still for the configured dwell time (2200 ms by default).  
-   - The rest of the page will dim and a rounded spotlight will appear around the active block.
-
-3. **Leave focus**
-   - Move your pointer well outside the spotlighted block, or  
-   - Press `Escape` to clear the spotlight and restart dwell tracking.
+- Hover and dwell over the content you want to focus.
+- Stop scrolling on a long page to trigger scroll-stop focus.
+- Move away from the focused area to let Umbra clear, or press `Escape`.
+- Shift + Click pins the currently selected surface.
 
 ---
 
 ## Popup controls
 
-Click the Umbra toolbar icon to open the popup:
+Open the Umbra toolbar popup to control:
 
-- **Enable extension** – turns Umbra on or off globally.  
-- **Dwell before focus** – slider to adjust how long the pointer must stay still before focus triggers.  
-- **Overlay strength** – slider to control how dark the non-focused areas become.  
-- **Focus now** – immediately triggers a spotlight around the block beneath your cursor.  
-- **Pause on this tab** – disables Umbra only for the current tab; useful for sites where you never want focus mode.  
-- **More settings** – opens the full options page.
+- Global enable/disable
+- Current site mode: Auto / Manual / Off
+- Focus now
+- Pin block
+- Pause on this tab
+- Add or remove the site from the ignore list
+- Advanced settings entry point
 
 ---
 
-## Options page
+## Options page (advanced settings)
 
-From the popup, click **More settings**, or right-click the Umbra icon and choose **Options**.
+Umbra settings are stored in `chrome.storage.sync` and applied live:
 
-You can tune:
-
-- Enabled / disabled state  
-- Dwell delay (milliseconds)  
-- Overlay opacity (how dark the dimmed region is)  
-- Horizontal and vertical padding around the focus block  
-- Corner radius of the spotlight window  
-- Transition speed for mask movement and fade  
-- Minimum width and height for candidate blocks  
-- Stationary tolerance and reveal distance used to decide when to clear focus  
-- Optional debug logging in the browser console
-
-All changes are applied via `chrome.storage.sync` and react live in open tabs.
+- Core behavior: enable, auto focus on hover, auto focus after scroll settles, show outline
+- Timing: hover dwell, scroll idle delay
+- Visuals: overlay opacity, blur strength
+- Geometry: padding, corner radius, transition speed, stationary tolerance, reveal buffer, center bias
+- Ignored sites: one hostname per line
 
 ---
 
 ## Privacy
 
-Umbra runs entirely in your browser:
+Umbra runs locally in your browser:
 
-- No analytics, tracking scripts, or external network calls.  
-- No content is sent to any server.  
-- All heuristics run locally in the content script, and settings are stored in Chrome sync storage.
-
-This repository is intended as a straightforward example of an opinionated “reading spotlight” implementation that you can inspect and modify.
+- No analytics, tracking scripts, or external network calls
+- No webpage content is sent to any server
+- Settings and preferences are stored in Chrome sync storage
 
 ---
 
-## Roadmap ideas
+## Documentation and contribution
 
-Planned or possible enhancements:
+- `umbra-extension/README.md` (product overview and rules)
+- `umbra-extension/docs/ARCHITECTURE.md` (engine stages and design constraints)
+- `umbra-extension/docs/SITE_PROFILES.md` (how to add site-specific behavior)
+- `umbra-extension/CONTRIBUTING.md` (contribution workflow)
 
-- Additional heuristics for more platforms and layouts.  
-- Per-site presets for tuning dwell and overlay strength.  
-- Export/import of settings.  
-- Optional keyboard-only focus controls.
-
-If you find a layout where Umbra behaves badly, open an issue with a screenshot and URL so the heuristics can be tuned.
 

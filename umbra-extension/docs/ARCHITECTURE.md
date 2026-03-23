@@ -16,7 +16,7 @@ The engine gathers candidate ancestors, scores them, rejects chrome-like shells,
 
 ## 3. Overlay rendering
 
-The chosen rectangle is rendered through four masks and an outline inside a shadow DOM host to reduce CSS collisions.
+The chosen rectangle is rendered as a single unified spotlight shell inside a shadow DOM host to reduce CSS collisions.
 
 ## Why site profiles exist
 

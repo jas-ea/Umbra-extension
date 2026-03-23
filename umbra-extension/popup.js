@@ -1,7 +1,7 @@
 const DEFAULTS = {
   enabled: true,
-  dwellMs: 1400,
-  overlayOpacity: 0.62,
+  dwellMs: 1200,
+  overlayOpacity: 0.58,
   ignoreDomains: [],
   siteOverrides: {}
 };

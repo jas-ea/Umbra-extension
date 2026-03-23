@@ -1,23 +1,22 @@
-# Manual Testing Checklist
+# Testing
 
-Install the unpacked extension and test each case.
+## Static checks run for Umbra 2.0
 
-On X or a similar timeline, stop scrolling on a long post and confirm Umbra focuses the visible post instead of the whole page.
+- `node --check` on `content.js`, `site-profiles.js`, `background.js`, `popup.js`, and `options.js`
+- archive extraction and file presence validation
+- manifest JSON parse validation
 
-On a blog article, move the cursor and let it rest over the body text. Confirm the article section is selected and the overlay transitions smoothly.
+## Recommended live QA before release
 
-Use Shift + Click on a content block and confirm it pins. Press Escape and confirm it clears.
+1. ChatGPT: hover over answer blocks, then move into the composer and verify the surface expands and tracks growth.
+2. X / Twitter: read a post, open reply, type, then move back to reading and verify the composer does not stay sticky.
+3. Gmail: test inbox rows, opened message bodies, and compose.
+4. Comparative site such as CoinGecko: verify row-level autofocus does not activate by default.
+5. Utility site such as Calendar or Figma: verify Auto stays suppressed or Off by default.
 
-Pause Umbra on a tab, refresh the page, and confirm the tab pause state behaves as expected for that session.
+## Acceptance criteria
 
-Ignore a domain from the popup, refresh, and confirm Umbra stays inactive there.
-
-Adjust opacity and dwell from the popup and confirm changes apply immediately.
-
-
-## Regression checks
-
-- Open a fresh page without moving the cursor. Umbra should not focus anything.
-- Move the cursor and hold over a tweet, article block, or email body. Umbra should wait for dwell, then focus.
-- Scroll and stop on a long article or thread. Umbra should wait for scroll idle, then focus the nearest readable block rather than the entire app shell.
-- Interact with obvious controls like buttons, search boxes, compose boxes, or menus. Umbra should avoid locking onto those controls.
+- pointer-local reading should win when there is no fresh direct manipulation elsewhere
+- creation surfaces should expand to include their controls
+- when a surface grows or collapses, the shell should reconcile within one visible layout beat
+- on uncertainty, Umbra should widen, soften, or stay off instead of cropping critical controls

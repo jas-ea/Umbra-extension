@@ -1,60 +1,11 @@
-## 1.6.0
-
-- Rebuilt the rule engine around pointer-first attention. Mouse dwell now regains priority over stale composer/input locks when the user moves away to read.
-- Added decay-based action locks so creation surfaces only dominate briefly after real activity, not merely because an input exists on the page.
-- Added live surface tracking with ResizeObserver and MutationObserver so expanding composers and closing popups reflow the focus shell more reliably.
-- Tightened exit timing for composer/input transitions and reduced lingering overlay behavior.
-- Adjusted default dwell, scroll idle, hide grace, and transition timings to feel less sticky.
-
-## 1.5.0
-- Added a new `comparative` selection model for sites where meaning comes from comparing rows and columns together, such as CoinGecko-style market tables.
-- Added site profiles for CoinGecko and a broader comparative market-table family, both defaulting to Manual so Umbra does not aggressively isolate single rows.
-- Softened the focus treatment with subtler corner radius and gentler shadowing.
-- Reduced visual jitter with overlap-based retarget hysteresis and a short hide grace period so the overlay does not flash off during small pointer exits.
-
-## 1.4.1
-- Added surface-level selection so Umbra locks to whole reading/message/card surfaces instead of drilling into inner paragraphs or chips.
-- Added site profiles for ChatGPT, Claude, and Gemini.
-- Reduced over-narrow focus inside long-form reading and AI chat pages.
-
-## 1.4.0
-
-- Added per-site modes in the popup: Auto, Manual, and Off.
-- Added site override storage via `siteOverrides`.
-- Added first-principles utility-app suppression for interactive, low-reading pages.
-- Added default-off or manual profiles for Google Calendar, Docs editors, Figma, Notion, and Slack.
-- Updated README and architecture docs for public open-source contribution around site modes.
-
 # Changelog
 
-## 1.3.0
+## 2.0.0
 
-- Added a declarative `site-profiles.js` registry so public contributors can add website-specific handling without editing the global engine first.
-- Updated the core engine to resolve an active site profile and use profile-provided quick selectors, preferred selectors, reject selectors, viewport sample points, and fallback selectors.
-- Rewrote the README for public-repo use, documenting architecture, contribution workflow, and the intended split between global heuristics and site-specific fixes.
-- Added `CONTRIBUTING.md`, `docs/SITE_PROFILES.md`, `docs/ARCHITECTURE.md`, issue templates, and a pull request template.
-
-## 1.2.2
-
-- Fixed two recurring targeting failures: Substack feed cards now prefer the full post card context instead of the inner text block, and Gmail now prefers message rows or message bodies over the whole shell.
-- Added contextual expansion so Umbra keeps essential author metadata and action controls visible instead of cropping too narrowly into the text-only child.
-- Improved page-type detection for Substack feed versus Substack article pages and adjusted viewport sampling points for timeline and Gmail layouts.
-- Increased penalties for container shells, search rails, recommendation carousels, and oversized wrappers that were still slipping into focus.
-
-# Changelog
-
-## 1.2.1
-
-- Fixed the most visible behavior bug: Umbra no longer auto-focuses immediately on page load before the user has shown hover or scroll intent.
-- Reworked target selection around intent-gated activation, multi-point viewport sampling, and stronger penalties for toolbars, sidebars, sticky chrome, and oversized app shells.
-- Added lightweight site profiles for Gmail, timeline-style sites, and long-form article sites so the focus box lands on the message, card, or article more often.
-- Improved move-out behavior while scrolling or switching targets so the overlay clears faster and feels less sticky.
-
-## 1.2.0
-
-- Productized the original prototype into Umbra with popup controls, tab pause, site ignore, pinning, docs, and icon assets.
-
-## 1.5.1
-- Replaced four-mask spotlight with a single rounded focus shell, eliminating the double-layer edge artifact.
-- Added interaction-mode: when the user is typing or editing, Umbra expands to the nearest composer/form surface or gets out of the way.
-- Improved click/focus behavior on reply composers and other interactive surfaces.
+- Rebuilt the core engine around a pointer-first rule stack.
+- Added explicit read / compare / create / act handling in the selection flow.
+- Replaced the older multi-layer mask feel with a single unified spotlight shell.
+- Added lifecycle tracking for the active surface with `ResizeObserver` and `MutationObserver`.
+- Reduced sticky action bias so passive reading can reclaim control after real interaction ends.
+- Tightened defaults for dwell, transitions, and hide grace to improve exit behavior.
+- Kept site-specific customizations declarative in `site-profiles.js`.
