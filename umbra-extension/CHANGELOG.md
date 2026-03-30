@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.0.1
+
+- Refined the X / Twitter site profile: timeline cell articles (`cellInnerDiv`), explicit `surfaceSelectors`, and broader rejection of compose/post chrome, drawers, and toolbars so reading surfaces stay ahead of utility UI on mixed pages.
+
 ## 2.0.0
 
 - Rebuilt the core engine around a pointer-first rule stack.

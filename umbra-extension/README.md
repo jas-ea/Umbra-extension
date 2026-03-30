@@ -66,6 +66,10 @@ Add site fixes to `site-profiles.js` first. Only change `content.js` when the is
 3. Click **Load unpacked**
 4. Select the `umbra-extension` folder
 
+## v2.0.1 notes
+
+This patch tightens the X / Twitter profile in `site-profiles.js` so timeline posts are easier to separate from composer, drawers, and utility chrome—keeping candidate scoring aligned with pointer-first reading on that surface.
+
 ## Testing
 
 A static smoke-test pass was run for this build:
