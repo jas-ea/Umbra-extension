@@ -14,6 +14,7 @@
     hideGraceMs: 45,
     actionLockMs: 700,
     pointerPriorityMs: 220,
+    refocusCooldownMs: 5000,
     autoOnScroll: true,
     autoOnHover: true,
     ignoreDomains: [],
@@ -58,6 +59,7 @@
     actionLockEl: null,
     actionLockMode: null,
     actionUntil: 0,
+    nextAutoAcquireAt: 0,
     overlayHost: null,
     overlayShadow: null,
     shell: null,
@@ -579,10 +581,11 @@
 
   function scheduleReacquire() {
     clearTimeout(state.transitionTimer);
+    const delay = Math.max(120, autoAcquireCooldownRemaining());
     state.transitionTimer = setTimeout(() => {
       if (!canAutoRun() || state.pinned) return;
       acquireSurface('transition');
-    }, 120);
+    }, delay);
   }
 
   function clearTimers() {
@@ -592,12 +595,27 @@
     state.hoverTimer = state.scrollTimer = state.transitionTimer = null;
   }
 
+  function autoAcquireCooldownRemaining() {
+    return Math.max(0, state.nextAutoAcquireAt - nowTs());
+  }
+
+  function bumpAutoAcquireCooldown(ms = state.settings.refocusCooldownMs || 5000) {
+    const until = nowTs() + ms;
+    if (until > state.nextAutoAcquireAt) state.nextAutoAcquireAt = until;
+  }
+
+  function autoAcquireBlocked(reason) {
+    if (reason === 'manual' || reason === 'click' || reason === 'focus' || reason === 'keydown') return false;
+    return autoAcquireCooldownRemaining() > 0;
+  }
+
   function usePointerReadTruth() {
     return nowTs() - state.lastPointerMoveAt > state.settings.dwellMs && !activeTyping();
   }
 
   function acquireSurface(reason) {
     if (!canAutoRun() || !state.hasUserInteracted || state.pinned) return null;
+    if (autoAcquireBlocked(reason)) return null;
 
     let family = pageFamily();
     let sourceEl = null;
@@ -637,17 +655,19 @@
   function queueHoverAcquire() {
     clearTimeout(state.hoverTimer);
     if (!canAutoRun() || !state.settings.autoOnHover || state.pinned) return;
+    const delay = Math.max(state.settings.dwellMs, autoAcquireCooldownRemaining());
     state.hoverTimer = setTimeout(() => {
       acquireSurface('hover');
-    }, state.settings.dwellMs);
+    }, delay);
   }
 
   function queueScrollAcquire() {
     clearTimeout(state.scrollTimer);
     if (!canAutoRun() || !state.settings.autoOnScroll || state.pinned) return;
+    const delay = Math.max(state.settings.scrollIdleMs, autoAcquireCooldownRemaining());
     state.scrollTimer = setTimeout(() => {
       acquireSurface('scroll');
-    }, state.settings.scrollIdleMs);
+    }, delay);
   }
 
   function recordActionLock(el, mode) {
@@ -666,7 +686,8 @@
     if (!state.visible || !state.activeRect || state.pinned) return;
     const buffer = state.settings.revealBuffer;
     if (!pointInsideRect(state.pointerX, state.pointerY, state.activeRect, buffer)) {
-      hideOverlay(false);
+      const farOutside = !pointInsideRect(state.pointerX, state.pointerY, state.activeRect, buffer * 2.2);
+      hideOverlay(farOutside);
     }
   }
 
@@ -678,6 +699,8 @@
     state.hasUserInteracted = true;
 
     if (moved >= state.settings.stationaryTolerance) {
+      bumpAutoAcquireCooldown();
+      if (!state.pinned && state.visible) hideOverlay(true);
       queueHoverAcquire();
     }
     maybeHideOnPointerExit();
@@ -686,6 +709,8 @@
   function onScroll() {
     state.hasUserInteracted = true;
     state.lastScrollAt = nowTs();
+    bumpAutoAcquireCooldown();
+    if (!state.pinned && state.visible) hideOverlay(true);
     if (state.activeSurface && !state.pinned) scheduleSurfaceRefresh('scroll');
     queueScrollAcquire();
   }
@@ -736,6 +761,7 @@
       state.pinned = false;
       state.actionLockEl = null;
       state.actionUntil = 0;
+      bumpAutoAcquireCooldown(0);
       hideOverlay(true);
       scheduleReacquire();
     }

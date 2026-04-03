@@ -66,9 +66,13 @@ Add site fixes to `site-profiles.js` first. Only change `content.js` when the is
 3. Click **Load unpacked**
 4. Select the `umbra-extension` folder
 
+## v2.0.2 notes
+
+This release adds a real auto-refocus cooldown in `content.js`: after enough pointer movement or scroll activity, automatic reacquire waits out a short window so the spotlight does not fight you while you move around the page. Stale surfaces clear faster on pointer motion; transition and scroll timers respect the same cooldown.
+
 ## v2.0.1 notes
 
-This patch tightens the X / Twitter profile in `site-profiles.js` so timeline posts are easier to separate from composer, drawers, and utility chrome—keeping candidate scoring aligned with pointer-first reading on that surface.
+The X / Twitter profile in `site-profiles.js` was tightened so timeline posts are easier to separate from composer, drawers, and utility chrome—keeping candidate scoring aligned with pointer-first reading on that surface.
 
 ## Testing
 

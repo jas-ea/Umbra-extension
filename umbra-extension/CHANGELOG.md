@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.0.2
+
+- Enforced a configurable default 5s auto-refocus cooldown after significant pointer movement and scrolling (`refocusCooldownMs`).
+- Made pointer movement clear stale focus more decisively instead of letting old surfaces linger.
+- Delayed transition- and scroll-driven reacquire until the cooldown expires, so browsing feels calmer and less twitchy.
+
 ## 2.0.1
 
 - Refined the X / Twitter site profile: timeline cell articles (`cellInnerDiv`), explicit `surfaceSelectors`, and broader rejection of compose/post chrome, drawers, and toolbars so reading surfaces stay ahead of utility UI on mixed pages.
