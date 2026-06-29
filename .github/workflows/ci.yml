@@ -28,5 +28,11 @@ jobs:
       - name: Test
         run: npm test
 
+      - name: Install browser
+        run: npx playwright install --with-deps chromium
+
+      - name: End-to-end fixtures
+        run: xvfb-run -a npm run test:e2e
+
       - name: Validate extension
         run: npm run validate

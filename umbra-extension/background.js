@@ -1,25 +1,22 @@
-const DEFAULTS = {
-  enabled: true,
-  dwellMs: 1200,
-  scrollIdleMs: 380,
-  overlayOpacity: 0.58,
-  blurPx: 2,
-  paddingX: 24,
-  paddingY: 20,
-  cornerRadius: 18,
-  transitionMs: 170,
-  stationaryTolerance: 10,
-  revealBuffer: 44,
-  centerBias: 0.38,
-  autoOnScroll: true,
-  autoOnHover: true,
-  showOutline: true,
-  ignoreDomains: [],
-  debug: false
-};
+import "./defaults.js";
+
+async function migrateStoredSettings() {
+  const items = await chrome.storage.sync.get(null);
+  const migration = globalThis.UMBRA_STORAGE_MIGRATION(items || {});
+  if (Object.keys(migration.set).length) {
+    await chrome.storage.sync.set(migration.set);
+  }
+  if (migration.remove.length) {
+    await chrome.storage.sync.remove(migration.remove);
+  }
+}
 
 chrome.runtime.onInstalled.addListener(() => {
-  chrome.storage.sync.get(DEFAULTS, (items) => chrome.storage.sync.set(items));
+  migrateStoredSettings();
+});
+
+chrome.runtime.onStartup?.addListener(() => {
+  migrateStoredSettings();
 });
 
 async function withActiveTab(fn) {

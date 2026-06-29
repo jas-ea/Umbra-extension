@@ -30,6 +30,17 @@ export default [
     },
   },
   {
+    files: ["umbra-extension/background.js"],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: "module",
+      globals: {
+        ...globals.browser,
+        chrome: "readonly",
+      },
+    },
+  },
+  {
     files: [
       "eslint.config.js",
       "vitest.config.js",
@@ -41,6 +52,18 @@ export default [
       sourceType: "module",
       globals: {
         ...globals.node,
+      },
+    },
+  },
+  {
+    files: ["test/e2e/**/*.js"],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: "module",
+      globals: {
+        ...globals.node,
+        ...globals.browser,
+        chrome: "readonly",
       },
     },
   },

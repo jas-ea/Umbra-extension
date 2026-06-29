@@ -16,7 +16,6 @@ A profile is a plain object in `site-profiles.js`.
   preferSelectors: ['tr.zA', '.ii.gt', '.a3s'],
   rejectSelectors: ['[role="main"]', '[role="search"]'],
   rejectTokens: ['sidebar', 'toolbar', 'search'],
-  viewportPoints: [[0.56, 0.28], [0.56, 0.42], [0.56, 0.56]],
   fallbackSelectors: ['.ii.gt', 'tr.zA']
 }
 ```
@@ -27,7 +26,7 @@ A profile is a plain object in `site-profiles.js`.
 Determines whether the profile should be active.
 
 `intent`
-Controls the general scoring posture. Current values are `gmail`, `timeline`, `article`, and `generic`.
+Controls the general scoring posture. Current values include `article`, `timeline`, `chat`, `gmail`, `comparative`, `utility`, `hybrid`, and `generic`.
 
 `quickSelectors`
 Fast path selectors used before deeper scoring.
@@ -40,9 +39,6 @@ Selectors that should be treated as app chrome or layout shell.
 
 `rejectTokens`
 Class or id fragments that strongly suggest non-reading chrome.
-
-`viewportPoints`
-Relative viewport sample points used for scroll-stop focus.
 
 `fallbackSelectors`
 Last-resort selectors used when the normal pass fails.
@@ -77,10 +73,6 @@ Every profile should now declare a `defaultMode`:
 This is the preferred way to handle calendars, editors, dashboards, canvases, and other utility-heavy surfaces.
 
 
-### selectionModel
-Use `selectionModel: "surface"` when Umbra should focus the nearest page/app surface rather than a nested descendant. Good fits: articles, timelines, email rows/bodies, and AI chat messages.
-
-
 ## Comparative pages
 
-For markets, leaderboards, screeners, or other data-dense tables, prefer `selectionModel: "comparative"`. In that mode, surface selectors should point at table-level containers, not rows. Default these sites to `manual` unless the table-level autofocus is consistently useful.
+For markets, leaderboards, screeners, or other data-dense tables, set `intent: "comparative"` and point surface selectors at table-level containers, not rows. Default these sites to `manual` unless the table-level autofocus is consistently useful.

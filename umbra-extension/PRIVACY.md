@@ -4,7 +4,7 @@ Umbra does not collect, transmit, sell, or store personal browsing content on an
 
 ## What the extension uses
 
-Umbra reads page structure locally in the browser to identify a likely reading container. It stores only local user preferences through Chrome sync storage, such as whether the extension is enabled, visual settings, and ignored sites.
+Umbra reads page structure locally in the browser to identify a likely reading container. It stores only user preferences through Chrome sync storage, such as whether the extension is enabled, visual settings, and per-site mode overrides.
 
 ## What Umbra does not do
 
@@ -15,8 +15,6 @@ Umbra does not inject ads, affiliate code, tracking pixels, or third-party scrip
 ## Permissions rationale
 
 `storage` is used to save preferences.
-
-`activeTab` and `tabs` are used so the popup and hotkeys can talk to the active page.
 
 `<all_urls>` is required because the overlay needs to run on the pages you browse. Processing still happens entirely on-device.
 

@@ -1,5 +1,20 @@
 # Changelog
 
+## 2.1.0
+
+- Added product pillars and a repeatable CI/tooling foundation.
+- Added a single settings schema and a contract test to prevent fiction controls.
+- Removed dead blur, center-bias, selection-model, and viewport-point settings.
+- Wired the outline setting to the actual overlay border.
+- Added lifecycle teardown, double-injection protection, and same-document route detection.
+- Reduced streaming-page layout churn with debounced mutation refresh and cheaper candidate scoring.
+- Fixed nested-scroll tracking and large-surface geometry.
+- Trimmed permissions to `storage` plus `<all_urls>` host access and added full action icon sizes.
+- Added reduced-motion, forced-colors, and contrast-aware overlay behavior.
+- Unified per-site suppression around site modes.
+- Added unit and Playwright fixture coverage for geometry, mutation debounce, route changes, media settings, and Shift+Click text selection.
+- Added viewport reading-band scroll targeting, pre-dwell boundary preview, dim tint/feather/solid-dim/focus-shape customization, transformed-root dimming coverage, native modal suppression, storage write hygiene, and shortcut caveat documentation.
+
 ## 2.0.2
 
 - Enforced a configurable default 5s auto-refocus cooldown after significant pointer movement and scrolling (`refocusCooldownMs`).

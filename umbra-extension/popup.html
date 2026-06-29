@@ -14,7 +14,7 @@
         <h1>Umbra</h1>
         <p>Soft focus for tweets, articles, and dense pages.</p>
       </div>
-      <label class="switch" title="Enable Umbra everywhere except ignored sites">
+      <label class="switch" title="Enable Umbra everywhere except sites set to Off">
         <input type="checkbox" id="enabledToggle">
         <span class="slider"></span>
       </label>
@@ -48,13 +48,13 @@
     <section class="card">
       <div class="control-head">
         <span>Dwell</span>
-        <strong id="dwellValue">1.8s</strong>
+        <strong id="dwellValue">1.2s</strong>
       </div>
       <input id="dwellMs" type="range" min="700" max="5000" step="100">
 
       <div class="control-head space-top">
         <span>Intensity</span>
-        <strong id="opacityValue">62%</strong>
+        <strong id="opacityValue">58%</strong>
       </div>
       <input id="overlayOpacity" type="range" min="0.25" max="0.85" step="0.01">
     </section>
@@ -63,7 +63,6 @@
       <button id="focusNow">Focus now</button>
       <button id="pinNow">Pin block</button>
       <button id="pauseTab" class="secondary">Pause on this tab</button>
-      <button id="toggleIgnore" class="secondary">Add to legacy ignore list</button>
     </section>
 
     <footer class="footer">
@@ -71,6 +70,7 @@
       <span>Hotkeys: Alt+Shift+U / Alt+Shift+F</span>
     </footer>
   </main>
+  <script src="defaults.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

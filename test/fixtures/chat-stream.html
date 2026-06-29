@@ -1,0 +1,50 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Umbra fixture - chat stream</title>
+  <style>
+    body { margin: 0; font: 16px/1.5 system-ui, sans-serif; background: #101418; color: #f6f7f9; }
+    .app { display: grid; grid-template-columns: 220px 1fr; height: 100vh; }
+    nav { padding: 24px; background: #1d252d; }
+    .scroll-pane { height: 100vh; overflow: auto; padding: 36px 64px; box-sizing: border-box; }
+    .spacer { height: 360px; }
+    [data-message-author-role] { width: 720px; margin: 0 auto 24px; padding: 24px; border-radius: 8px; background: #f5f0e8; color: #191919; }
+    .composer { position: sticky; bottom: 0; width: 720px; margin: 0 auto; padding: 16px; background: #26313a; }
+  </style>
+</head>
+<body>
+  <script>
+    window.__UMBRA_TEST_HOOKS__ = true;
+    window.__umbraRectReads = 0;
+    const originalRect = Element.prototype.getBoundingClientRect;
+    Element.prototype.getBoundingClientRect = function patchedRect() {
+      window.__umbraRectReads += 1;
+      return originalRect.apply(this, arguments);
+    };
+  </script>
+  <div class="app">
+    <nav>Chat history</nav>
+    <main class="scroll-pane" id="chatScroll">
+      <div class="spacer"></div>
+      <article data-message-author-role="assistant" id="message-one">
+        <p>This answer is a stable chat message target. It has enough prose to be preferred over the scroll pane.</p>
+        <p>Umbra should keep this message lit as the nested pane scrolls.</p>
+      </article>
+      <article data-message-author-role="assistant" id="message-two">
+        <p>Streaming message target.</p>
+        <p id="streamTarget">Initial streamed text.</p>
+      </article>
+      <form class="composer"><textarea rows="3">Composer surface</textarea></form>
+      <div class="spacer"></div>
+    </main>
+  </div>
+  <script>
+    window.appendStreamChunk = () => {
+      const span = document.createElement("span");
+      span.textContent = " streamed token";
+      document.getElementById("streamTarget").append(span);
+    };
+  </script>
+</body>
+</html>

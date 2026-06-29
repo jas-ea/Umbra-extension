@@ -1,12 +1,10 @@
 {
   "manifest_version": 3,
   "name": "Umbra",
-  "version": "2.0.2",
+  "version": "2.1.0",
   "description": "A pointer-first focus overlay that softly dims the web while preserving reading, comparison, and creation flows.",
   "permissions": [
-    "storage",
-    "activeTab",
-    "tabs"
+    "storage"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -20,7 +18,9 @@
     "default_popup": "popup.html",
     "default_icon": {
       "16": "icons/icon16.png",
-      "32": "icons/icon32.png"
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
     }
   },
   "icons": {
@@ -50,6 +50,7 @@
         "<all_urls>"
       ],
       "js": [
+        "defaults.js",
         "site-profiles.js",
         "content.js"
       ],
