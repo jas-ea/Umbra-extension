@@ -1,12 +1,29 @@
 # Testing
 
-## Static checks run for Umbra 2.0
+## Local Gates
 
-- `node --check` on `content.js`, `site-profiles.js`, `background.js`, `popup.js`, and `options.js`
-- archive extraction and file presence validation
-- manifest JSON parse validation
+Run these from the repository root:
 
-## Recommended live QA before release
+```bash
+npm ci
+npm run lint
+npm test
+npm run test:e2e
+npm run validate
+```
+
+`npm test` runs the settings contract and unit helper tests. `npm run test:e2e` serves fixtures from `test/fixtures/` and loads `umbra-extension/` as an unpacked MV3 extension in Chromium.
+
+## Fixture Coverage
+
+- `article.html`: article cutout geometry and outline toggling.
+- `chat-stream.html`: nested scroll tracking and mutation debounce during streaming text.
+- `feed.html`: same-document route handling.
+- `comparative-table.html`: table fixture for comparative targeting work.
+- `composer.html`: composer fixture for action-lock and typing checks.
+- `transformed-html.html`: transformed-root fixture for four-rectangle dimming and native modal suppression.
+
+## Recommended Live QA Before Release
 
 1. ChatGPT: hover over answer blocks, then move into the composer and verify the surface expands and tracks growth.
 2. X / Twitter: read a post, open reply, type, then move back to reading and verify the composer does not stay sticky.

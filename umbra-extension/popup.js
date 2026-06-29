@@ -1,12 +1,15 @@
-const DEFAULTS = {
-  enabled: true,
-  dwellMs: 1200,
-  overlayOpacity: 0.58,
-  ignoreDomains: [],
-  siteOverrides: {}
-};
-
+const normalizeSettings = globalThis.UMBRA_NORMALIZE_SETTINGS;
 const $ = (id) => document.getElementById(id);
+
+function storageSet(items) {
+  return new Promise((resolve, reject) => {
+    chrome.storage.sync.set(items, () => {
+      const error = chrome.runtime.lastError;
+      if (error) reject(new Error(error.message));
+      else resolve();
+    });
+  });
+}
 
 async function getActiveTab() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -31,34 +34,20 @@ function normalizeHost(hostname) {
   return String(hostname || '').replace(/^www\./, '');
 }
 
-async function toggleIgnoreForHost(hostname) {
-  const host = normalizeHost(hostname);
-  const settings = await chrome.storage.sync.get(DEFAULTS);
-  const current = new Set((settings.ignoreDomains || []).map(normalizeHost));
-  if (current.has(host)) current.delete(host); else current.add(host);
-  await chrome.storage.sync.set({ ignoreDomains: Array.from(current).sort() });
-  return current.has(host);
-}
-
 async function setSiteMode(hostname, mode) {
   const host = normalizeHost(hostname);
-  const settings = await chrome.storage.sync.get(DEFAULTS);
+  const settings = normalizeSettings(await chrome.storage.sync.get(null));
   const overrides = { ...(settings.siteOverrides || {}) };
   if (!mode || mode === 'inherit') delete overrides[host];
   else overrides[host] = mode;
-  await chrome.storage.sync.set({ siteOverrides: overrides });
+  const entries = Object.entries(overrides).slice(-(globalThis.UMBRA_MAX_SITE_OVERRIDES || 120));
+  await storageSet({ siteOverrides: Object.fromEntries(entries) });
   return mode;
 }
 
 function paintSiteState(state) {
   const siteState = $('siteState');
   const reason = state?.autoBlockedReason;
-  if (state?.ignored) {
-    siteState.textContent = 'Ignored by domain list';
-    siteState.style.background = 'rgba(255,173,92,0.14)';
-    siteState.style.color = '#ffd4a6';
-    return;
-  }
   if (state?.pausedForTab) {
     siteState.textContent = 'Paused on this tab';
     siteState.style.background = 'rgba(255,255,255,0.08)';
@@ -88,6 +77,16 @@ function paintSiteState(state) {
   siteState.style.color = '#b7f2c9';
 }
 
+function paintReloadHint() {
+  const siteState = $('siteState');
+  siteState.textContent = 'Reload this tab to control Umbra';
+  siteState.style.background = 'rgba(255,173,92,0.14)';
+  siteState.style.color = '#ffd4a6';
+  for (const id of ['focusNow', 'pinNow', 'pauseTab']) {
+    $(id).disabled = true;
+  }
+}
+
 function paintSiteMode(mode) {
   $('siteModeText').textContent = mode === 'off' ? 'Off' : mode === 'manual' ? 'Manual' : 'Auto';
   $('siteModeBadge').textContent = mode === 'off' ? 'Off mode' : mode === 'manual' ? 'Manual mode' : 'Auto mode';
@@ -104,7 +103,7 @@ function paintSiteMode(mode) {
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
-  const settings = await chrome.storage.sync.get(DEFAULTS);
+  const settings = normalizeSettings(await chrome.storage.sync.get(null));
   const state = await sendToTab({ type: 'UMBRA_GET_STATE' });
   const tab = await getActiveTab();
   const hostname = state?.hostname || (() => { try { return new URL(tab.url).hostname; } catch { return 'Current page'; } })();
@@ -115,26 +114,30 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('overlayOpacity').value = Number(settings.overlayOpacity);
   $('dwellValue').textContent = formatSeconds(Number(settings.dwellMs));
   $('opacityValue').textContent = `${Math.round(Number(settings.overlayOpacity) * 100)}%`;
-  paintSiteState(state || { pausedForTab: false, ignored: false });
+  if (state) paintSiteState(state);
+  else paintReloadHint();
   const currentSiteMode = state?.siteMode || (settings.siteOverrides || {})[normalizeHost(hostname)] || 'auto';
   paintSiteMode(currentSiteMode);
-  $('toggleIgnore').textContent = state?.ignored ? 'Remove from legacy ignore list' : 'Add to legacy ignore list';
   $('pauseTab').textContent = state?.pausedForTab ? 'Resume on this tab' : 'Pause on this tab';
 
   $('enabledToggle').addEventListener('change', async () => {
-    await chrome.storage.sync.set({ enabled: $('enabledToggle').checked });
+    await storageSet({ enabled: $('enabledToggle').checked });
   });
 
-  $('dwellMs').addEventListener('input', async () => {
+  $('dwellMs').addEventListener('input', () => {
     const value = Number($('dwellMs').value);
     $('dwellValue').textContent = formatSeconds(value);
-    await chrome.storage.sync.set({ dwellMs: value });
+  });
+  $('dwellMs').addEventListener('change', async () => {
+    await storageSet({ dwellMs: Number($('dwellMs').value) });
   });
 
-  $('overlayOpacity').addEventListener('input', async () => {
+  $('overlayOpacity').addEventListener('input', () => {
     const value = Number($('overlayOpacity').value);
     $('opacityValue').textContent = `${Math.round(value * 100)}%`;
-    await chrome.storage.sync.set({ overlayOpacity: value });
+  });
+  $('overlayOpacity').addEventListener('change', async () => {
+    await storageSet({ overlayOpacity: Number($('overlayOpacity').value) });
   });
 
   $('siteModeAuto').addEventListener('click', async () => {
@@ -165,14 +168,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   $('pauseTab').addEventListener('click', async () => {
     const response = await sendToTab({ type: 'UMBRA_TOGGLE_TAB_PAUSE' });
+    if (!response) {
+      paintReloadHint();
+      return;
+    }
     $('pauseTab').textContent = response?.pausedForTab ? 'Resume on this tab' : 'Pause on this tab';
-    paintSiteState({ pausedForTab: !!response?.pausedForTab, ignored: false });
-  });
-
-  $('toggleIgnore').addEventListener('click', async () => {
-    const ignoredNow = await toggleIgnoreForHost(hostname);
-    $('toggleIgnore').textContent = ignoredNow ? 'Remove from legacy ignore list' : 'Add to legacy ignore list';
-    paintSiteState({ pausedForTab: false, ignored: ignoredNow });
+    paintSiteState({ pausedForTab: !!response?.pausedForTab });
   });
 
   $('openOptions').addEventListener('click', () => chrome.runtime.openOptionsPage());

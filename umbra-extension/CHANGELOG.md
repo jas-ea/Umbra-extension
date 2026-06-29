@@ -1,5 +1,23 @@
 # Changelog
 
+## 2.1.0
+
+- Added product pillars and a repeatable CI/tooling foundation.
+- Added a single settings schema and a contract test to prevent fiction controls.
+- Removed dead blur, center-bias, selection-model, and viewport-point settings.
+- Wired the outline setting to the actual overlay border.
+- Added lifecycle teardown, double-injection protection, and same-document route detection.
+- Reduced streaming-page layout churn with debounced mutation refresh and cheaper candidate scoring.
+- Fixed nested-scroll tracking and large-surface geometry.
+- Trimmed permissions to `storage` plus `<all_urls>` host access and added full action icon sizes.
+- Added reduced-motion, forced-colors, and contrast-aware overlay behavior.
+- Unified per-site suppression around site modes.
+- Added unit and Playwright fixture coverage for geometry, mutation debounce, route changes, media settings, and Shift+Click text selection.
+- Added viewport reading-band scroll targeting, pre-dwell boundary preview, dim tint/feather/solid-dim/focus-shape customization, transformed-root dimming coverage, native modal suppression, storage write hygiene, and shortcut caveat documentation.
+- Added a per-tab toolbar state badge (off / paused / manual) so Umbra's status is visible without opening the popup.
+- Hardened fallback surface selection against empty selector lists and cleared lingering boundary-preview outlines on scroll.
+- Finalized store readiness: real privacy-policy contact and Limited Use data-use disclosure, plus a `homepage_url` in the manifest.
+
 ## 2.0.2
 
 - Enforced a configurable default 5s auto-refocus cooldown after significant pointer movement and scrolling (`refocusCooldownMs`).

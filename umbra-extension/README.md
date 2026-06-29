@@ -1,10 +1,10 @@
-# Umbra 2.0
+# Umbra 2.1
 
-Umbra is a pointer-first focus layer for the live web. It dims surrounding chrome without rewriting pages, and it is designed to fail safe when unsure.
+Umbra is a local-first focus layer for the live web. It dims surrounding chrome without rewriting pages, and it is designed to fail safe when unsure.
 
 ## Product rules
 
-Umbra 2.0 is built around a small rule engine:
+Umbra is built around a small rule engine:
 
 1. Pointer position plus dwell is the default truth for passive reading.
 2. Read, compare, create, and act are different states.
@@ -12,7 +12,18 @@ Umbra 2.0 is built around a small rule engine:
 4. If Umbra is uncertain, it widens, softens, or does nothing.
 5. Exit quality matters as much as entry quality.
 
-## What changed in 2.0
+## What changed in 2.1
+
+- Added a single authoritative settings schema in `defaults.js`.
+- Removed dead visual settings and wired `showOutline` to the actual overlay border.
+- Removed unused profile fields so `intent` is the source of targeting posture.
+- Added teardown, double-injection protection, same-document route handling, and nested-scroll tracking.
+- Reduced streaming/layout churn by debouncing mutation refresh and avoiding `innerText` in scoring.
+- Trimmed extension permissions to `storage` plus `<all_urls>` host access.
+- Added unit, contract, and Playwright fixture coverage.
+- Added viewport reading-band scroll targeting, pre-dwell boundary preview, richer dim customization, and four-rectangle dimming for transformed pages.
+
+## Core 2.0 behavior
 
 - Pointer-first targeting is restored as the primary invariant.
 - Action and composer surfaces now use short-lived locks instead of sticky presence bias.
@@ -31,9 +42,13 @@ Umbra 2.0 is built around a small rule engine:
 ## Controls
 
 - Popup: global enable, current-site Auto / Manual / Off, Focus now, Pin block, Pause on this tab.
+- Options: behavior, timing, overlay opacity, geometry, outline, debug logs, and per-site mode overrides.
 - Hotkeys: `Alt+Shift+U` pauses the current tab, `Alt+Shift+F` forces focus now.
 - Shift + Click pins the surface under the pointer.
 - Escape clears the current focus and releases pinning.
+- Toolbar badge: the action icon shows the current tab's state at a glance — `OFF` when disabled or set to Off, `II` when paused on the tab, `M` in Manual mode, and nothing when auto-focus is active.
+
+Chrome extension shortcuts can be remapped. This matters on Windows/Linux setups where `Alt+Shift` is used for keyboard layout switching.
 
 ## Fallback behavior
 
@@ -46,10 +61,11 @@ Umbra is deliberately conservative. If it cannot identify a trustworthy surface,
 ## Repo structure
 
 - `content.js`: the core pointer-first rule engine
+- `defaults.js`: the single settings schema
 - `site-profiles.js`: declarative site profiles and defaults
 - `popup.*`: quick controls
 - `options.*`: advanced settings
-- `docs/`: architecture and contribution notes
+- `docs/`: architecture, accessibility, and contribution notes
 
 ## Contributing
 
@@ -66,6 +82,20 @@ Add site fixes to `site-profiles.js` first. Only change `content.js` when the is
 3. Click **Load unpacked**
 4. Select the `umbra-extension` folder
 
+## Testing
+
+Run the local gates from the repository root:
+
+```bash
+npm ci
+npm run lint
+npm test
+npm run test:e2e
+npm run validate
+```
+
+The Playwright suite serves local fixtures and loads the unpacked extension in Chromium.
+
 ## v2.0.2 notes
 
 This release adds a real auto-refocus cooldown in `content.js`: after enough pointer movement or scroll activity, automatic reacquire waits out a short window so the spotlight does not fight you while you move around the page. Stale surfaces clear faster on pointer motion; transition and scroll timers respect the same cooldown.
@@ -73,13 +103,3 @@ This release adds a real auto-refocus cooldown in `content.js`: after enough poi
 ## v2.0.1 notes
 
 The X / Twitter profile in `site-profiles.js` was tightened so timeline posts are easier to separate from composer, drawers, and utility chrome—keeping candidate scoring aligned with pointer-first reading on that surface.
-
-## Testing
-
-A static smoke-test pass was run for this build:
-
-- all JavaScript files pass syntax checks with Node
-- manifest and asset paths resolve
-- the archive loads as a valid unpacked extension folder
-
-A full live browser QA pass still matters before publishing to a store.

@@ -28,7 +28,8 @@
         <label><span>Hover dwell (ms)</span><input type="number" id="dwellMs" min="700" max="5000" step="100"></label>
         <label><span>Scroll idle delay (ms)</span><input type="number" id="scrollIdleMs" min="100" max="2000" step="20"></label>
         <label><span>Overlay opacity</span><input type="number" id="overlayOpacity" min="0.25" max="0.85" step="0.01"></label>
-        <label><span>Blur strength (px)</span><input type="number" id="blurPx" min="0" max="10" step="0.5"></label>
+        <label><span>Dim tint</span><input type="color" id="dimTint"></label>
+        <label><span>Solid dim</span><input type="checkbox" id="solidDim"></label>
       </div>
     </section>
 
@@ -41,15 +42,17 @@
         <label><span>Transition speed (ms)</span><input type="number" id="transitionMs" min="120" max="900" step="10"></label>
         <label><span>Stationary tolerance (px)</span><input type="number" id="stationaryTolerance" min="2" max="80" step="1"></label>
         <label><span>Reveal buffer (px)</span><input type="number" id="revealBuffer" min="0" max="200" step="1"></label>
-        <label><span>Viewport focus bias (0–1)</span><input type="number" id="centerBias" min="0.2" max="0.8" step="0.01"></label>
+        <label><span>Reading band position (0-1)</span><input type="number" id="readingBandY" min="0.2" max="0.75" step="0.01"></label>
+        <label><span>Edge feather (px)</span><input type="number" id="edgeFeather" min="0" max="80" step="1"></label>
+        <label><span>Focus shape</span><select id="focusMode"><option value="block">Whole block</option><option value="band">Reading band</option></select></label>
         <label><span>Debug logs</span><input type="checkbox" id="debug"></label>
       </div>
     </section>
 
     <section class="panel">
-      <h2>Ignored sites</h2>
-      <p class="muted">One hostname per line. Example: x.com or medium.com</p>
-      <textarea id="ignoreDomains" rows="8" placeholder="x.com&#10;docs.google.com"></textarea>
+      <h2>Site modes</h2>
+      <p class="muted">One hostname per line. Use hostname=off or hostname=manual.</p>
+      <textarea id="siteOverrides" rows="8" placeholder="x.com=off&#10;docs.google.com=manual"></textarea>
     </section>
 
     <section class="panel actions">
@@ -58,6 +61,7 @@
       <span id="status"></span>
     </section>
   </main>
+  <script src="defaults.js"></script>
   <script src="options.js"></script>
 </body>
 </html>

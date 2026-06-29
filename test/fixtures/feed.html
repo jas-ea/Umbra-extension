@@ -1,0 +1,31 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Umbra fixture - feed</title>
+  <style>
+    body { margin: 0; font: 16px/1.5 system-ui, sans-serif; background: #eef2f5; color: #111; }
+    main { width: 680px; margin: 36px auto; }
+    article { margin: 0 0 18px; padding: 22px; background: white; border: 1px solid #d7dde3; }
+    .spacer { height: 420px; }
+    button { margin: 24px 0; }
+  </style>
+</head>
+<body>
+  <script>window.__UMBRA_TEST_HOOKS__ = true;</script>
+  <main>
+    <button id="routeArticle">Navigate to article route</button>
+    <article id="feed-card"><h2>Feed card</h2><p>A feed-style surface for route-change and timeline checks.</p></article>
+    <div class="spacer"></div>
+    <article id="feed-card-two"><h2>Second card</h2><p>Another stable surface that should win when it sits in the reading band.</p></article>
+    <div class="spacer"></div>
+    <article><h2>Third card</h2><p>Extra height keeps the fixture scrollable.</p></article>
+  </main>
+  <script>
+    document.getElementById("routeArticle").addEventListener("click", () => {
+      history.pushState({}, "", "/article");
+      document.title = "Umbra fixture - article route";
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Umbra fixture - article</title>
+  <style>
+    body { margin: 0; font: 18px/1.6 system-ui, sans-serif; background: #f7f4ee; color: #161616; }
+    header { height: 88px; padding: 24px 48px; background: #22333b; color: white; box-sizing: border-box; }
+    main { width: 720px; margin: 56px auto 120px; }
+    article { background: white; padding: 32px; border: 1px solid #ddd; }
+    p { margin: 0 0 18px; }
+  </style>
+</head>
+<body>
+  <script>window.__UMBRA_TEST_HOOKS__ = true;</script>
+  <header>Fixture navigation</header>
+  <main>
+    <article id="target-article">
+      <h1>Long article fixture</h1>
+      <p>This fixture gives Umbra a stable semantic block with enough text to win article scoring.</p>
+      <p>The article sits away from the viewport edge so the expected cutout can be checked against the surface rectangle plus default padding.</p>
+      <p>Additional paragraph text keeps the surface clearly more relevant than the page shell around it.</p>
+    </article>
+  </main>
+</body>
+</html>

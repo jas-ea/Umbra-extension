@@ -1,0 +1,23 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Umbra fixture - transformed html</title>
+  <style>
+    html { transform: translateZ(0); }
+    body { margin: 0; min-height: 140vh; font: 18px/1.6 system-ui, sans-serif; background: #ebe7df; color: #1a1a1a; }
+    main { width: 720px; margin: 80px auto; }
+    article { background: white; padding: 30px; border: 1px solid #d8d0c4; }
+  </style>
+</head>
+<body>
+  <script>window.__UMBRA_TEST_HOOKS__ = true;</script>
+  <main>
+    <article id="transformed-target">
+      <h1>Transformed root fixture</h1>
+      <p>The html element has a transform so dimming coverage can be checked against a hostile containing block.</p>
+      <p>The target remains a normal article surface for Umbra's selection engine.</p>
+    </article>
+  </main>
+</body>
+</html>

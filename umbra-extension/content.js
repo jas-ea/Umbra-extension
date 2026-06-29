@@ -1,27 +1,10 @@
 
 (() => {
-  const DEFAULTS = {
-    enabled: true,
-    dwellMs: 1200,
-    scrollIdleMs: 380,
-    overlayOpacity: 0.58,
-    paddingX: 24,
-    paddingY: 20,
-    cornerRadius: 18,
-    transitionMs: 170,
-    stationaryTolerance: 10,
-    revealBuffer: 44,
-    hideGraceMs: 45,
-    actionLockMs: 700,
-    pointerPriorityMs: 220,
-    refocusCooldownMs: 5000,
-    autoOnScroll: true,
-    autoOnHover: true,
-    ignoreDomains: [],
-    siteOverrides: {},
-    appAutoSuppress: true,
-    debug: false
-  };
+  if (globalThis.__umbraInjected) return;
+  globalThis.__umbraInjected = true;
+
+  const settingsDefaults = globalThis.UMBRA_DEFAULTS;
+  const normalizeSettings = globalThis.UMBRA_NORMALIZE_SETTINGS;
 
   const INTERACTIVE_SELECTOR = [
     'button', 'input', 'textarea', 'select', 'summary', 'details',
@@ -37,7 +20,7 @@
   ].join(',');
 
   const state = {
-    settings: { ...DEFAULTS },
+    settings: { ...settingsDefaults },
     siteProfile: null,
     pausedForTab: false,
     pinned: false,
@@ -53,6 +36,7 @@
     lastClickAt: 0,
     hasUserInteracted: false,
     hoverTimer: null,
+    previewTimer: null,
     scrollTimer: null,
     hideTimer: null,
     transitionTimer: null,
@@ -63,10 +47,18 @@
     overlayHost: null,
     overlayShadow: null,
     shell: null,
+    dimmers: null,
     visible: false,
     resizeObserver: null,
     mutationObserver: null,
-    rafId: 0
+    rafId: 0,
+    mutationRefreshTimer: null,
+    routePollId: null,
+    routeCheckTimer: null,
+    lastHref: location.href,
+    navigationHandler: null,
+    runtimeMessageHandler: null,
+    storageChangedHandler: null
   };
 
   const storage = chrome.storage.sync;
@@ -78,16 +70,8 @@
   function nowTs() { return Date.now(); }
   function clamp(v, min, max) { return Math.min(max, Math.max(min, v)); }
   function distance(ax, ay, bx, by) { return Math.hypot(ax - bx, ay - by); }
-  function normalizeHost(value) { return String(value || '').trim().replace(/^www\./, ''); }
+  function normalizeHost(value) { return globalThis.UMBRA_NORMALIZE_HOST(value); }
   function selectorList(list) { return Array.isArray(list) ? list.filter(Boolean) : []; }
-
-  function domainIgnored() {
-    const host = normalizeHost(location.hostname);
-    return (state.settings.ignoreDomains || []).some((entry) => {
-      const needle = normalizeHost(entry);
-      return needle && (host === needle || host.endsWith(`.${needle}`));
-    });
-  }
 
   function getProfiles() {
     return Array.isArray(globalThis.UMBRA_SITE_PROFILES) ? globalThis.UMBRA_SITE_PROFILES : [];
@@ -107,13 +91,11 @@
       label: 'Generic',
       intent: 'generic',
       defaultMode: 'auto',
-      selectionModel: 'adaptive',
       quickSelectors: ['article', 'main', 'section'],
       preferSelectors: ['article', 'main', 'section'],
       surfaceSelectors: ['article', 'main', 'section', '[role="article"]', '[role="main"]'],
       rejectSelectors: ['aside', 'nav', 'header', 'footer'],
       rejectTokens: ['sidebar', 'menu', 'toolbar', 'banner', 'modal', 'dialog', 'popup', 'overlay', 'search', 'rail'],
-      viewportPoints: [[0.5, 0.38], [0.5, 0.52]],
       fallbackSelectors: ['article', 'main', '[role="article"]', '[role="main"]']
     };
   }
@@ -149,10 +131,23 @@
     return false;
   }
 
+  function topLayerModalOpen() {
+    try {
+      if (document.querySelector(':modal')) return true;
+    } catch (_) {
+      if (document.querySelector('dialog[open]')) return true;
+    }
+    try {
+      return !!document.querySelector(':popover-open');
+    } catch (_) {
+      return false;
+    }
+  }
+
   function autoBlockedReason() {
     if (!state.settings.enabled) return 'disabled';
     if (state.pausedForTab) return 'paused';
-    if (domainIgnored()) return 'ignored';
+    if (topLayerModalOpen()) return 'modal-open';
     const mode = currentSiteMode();
     if (mode === 'off') return 'site-off';
     if (mode === 'manual') return 'site-manual';
@@ -161,7 +156,7 @@
   }
 
   function canManualRun() {
-    return state.settings.enabled && !state.pausedForTab && !domainIgnored() && currentSiteMode() !== 'off';
+    return state.settings.enabled && !state.pausedForTab && currentSiteMode() !== 'off';
   }
 
   function canAutoRun() {
@@ -172,6 +167,7 @@
     if (state.overlayHost) return;
     const host = document.createElement('div');
     host.id = 'umbra-overlay-host';
+    host.setAttribute('aria-hidden', 'true');
     host.style.position = 'fixed';
     host.style.inset = '0';
     host.style.pointerEvents = 'none';
@@ -180,6 +176,15 @@
     const style = document.createElement('style');
     style.textContent = `
       :host { all: initial; }
+      .dimmer {
+        position: fixed;
+        pointer-events: none;
+        opacity: 0;
+        background: rgba(var(--umbra-dim-rgb, 0,0,0), var(--umbra-opacity,0.58));
+        transition: opacity 90ms ease;
+        will-change: opacity;
+      }
+      .dimmer.visible { opacity: 1; }
       .shell {
         position: fixed;
         left: 0;
@@ -189,8 +194,8 @@
         opacity: 0;
         background: transparent;
         border-radius: var(--umbra-radius, 18px);
-        border: 1px solid rgba(255,255,255,0.10);
-        box-shadow: 0 0 0 100vmax rgba(0,0,0,var(--umbra-opacity,0.58));
+        border: 1px solid var(--umbra-outline, rgba(255,255,255,0.10));
+        box-shadow: 0 0 var(--umbra-edge-feather, 0px) rgba(var(--umbra-dim-rgb, 0,0,0), var(--umbra-opacity,0.58));
         transition:
           left var(--umbra-transition,170ms) ease,
           top var(--umbra-transition,170ms) ease,
@@ -200,22 +205,103 @@
         will-change: left, top, width, height, opacity;
       }
       .shell.visible { opacity: 1; }
+      .shell.preview {
+        opacity: 1;
+        box-shadow: none;
+        border-color: rgba(255,255,255,0.34);
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .shell {
+          transition: opacity 90ms ease;
+          will-change: opacity;
+        }
+        .dimmer {
+          transition: opacity 90ms ease;
+        }
+      }
+      @media (prefers-contrast: more) {
+        .dimmer {
+          background: rgba(0,0,0,0.70);
+        }
+        .shell {
+          border-color: rgba(255,255,255,0.36);
+        }
+      }
+      @media (forced-colors: active) {
+        .dimmer {
+          display: none;
+        }
+        .shell {
+          border: 2px solid CanvasText;
+          box-shadow: none;
+        }
+      }
     `;
+    const dimmers = ['top', 'right', 'bottom', 'left'].map((name) => {
+      const dimmer = document.createElement('div');
+      dimmer.className = `dimmer ${name}`;
+      return dimmer;
+    });
     const shell = document.createElement('div');
     shell.className = 'shell';
-    shadow.append(style, shell);
+    shadow.append(style, ...dimmers, shell);
     document.documentElement.appendChild(host);
     state.overlayHost = host;
     state.overlayShadow = shadow;
     state.shell = shell;
+    state.dimmers = dimmers;
     applyVisualSettings();
   }
 
   function applyVisualSettings() {
     if (!state.overlayHost) return;
-    state.overlayHost.style.setProperty('--umbra-opacity', String(state.settings.overlayOpacity));
+    const rgb = hexToRgb(state.settings.dimTint || '#000000');
+    const opacity = state.settings.solidDim ? 1 : state.settings.overlayOpacity;
+    state.overlayHost.style.setProperty('--umbra-opacity', String(opacity));
+    state.overlayHost.style.setProperty('--umbra-dim-rgb', rgb.join(','));
     state.overlayHost.style.setProperty('--umbra-radius', `${state.settings.cornerRadius}px`);
     state.overlayHost.style.setProperty('--umbra-transition', `${state.settings.transitionMs}ms`);
+    state.overlayHost.style.setProperty('--umbra-outline', state.settings.showOutline ? 'rgba(255,255,255,0.10)' : 'transparent');
+    state.overlayHost.style.setProperty('--umbra-edge-feather', `${state.settings.edgeFeather || 0}px`);
+  }
+
+  function hexToRgb(value) {
+    const match = String(value || '').trim().match(/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i);
+    if (!match) return [0, 0, 0];
+    return match.slice(1).map((part) => parseInt(part, 16));
+  }
+
+  function setDimmers(rect, visible) {
+    if (!state.dimmers) return;
+    const [topDimmer, rightDimmer, bottomDimmer, leftDimmer] = state.dimmers;
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    const left = clamp(rect.left, 0, width);
+    const right = clamp(rect.right, 0, width);
+    const top = clamp(rect.top, 0, height);
+    const bottom = clamp(rect.bottom, 0, height);
+    const specs = [
+      [topDimmer, 0, 0, width, top],
+      [rightDimmer, right, top, Math.max(0, width - right), Math.max(0, bottom - top)],
+      [bottomDimmer, 0, bottom, width, Math.max(0, height - bottom)],
+      [leftDimmer, 0, top, left, Math.max(0, bottom - top)]
+    ];
+    for (const [node, x, y, w, h] of specs) {
+      node.style.left = `${Math.round(x)}px`;
+      node.style.top = `${Math.round(y)}px`;
+      node.style.width = `${Math.round(w)}px`;
+      node.style.height = `${Math.round(h)}px`;
+      node.classList.toggle('visible', visible && w > 0 && h > 0);
+    }
+  }
+
+  function hideDimmers() {
+    if (!state.dimmers) return;
+    for (const dimmer of state.dimmers) dimmer.classList.remove('visible');
+  }
+
+  function clearPreview() {
+    if (state.shell && !state.visible) state.shell.classList.remove('preview', 'visible');
   }
 
   function clearHideTimer() {
@@ -229,14 +315,16 @@
     clearHideTimer();
     if (!state.shell) return;
     if (immediate) {
-      state.shell.classList.remove('visible');
+      state.shell.classList.remove('visible', 'preview');
+      hideDimmers();
       state.visible = false;
       state.activeRect = null;
       if (!state.pinned) state.activeSurface = null;
       return;
     }
     state.hideTimer = setTimeout(() => {
-      state.shell.classList.remove('visible');
+      state.shell.classList.remove('visible', 'preview');
+      hideDimmers();
       state.visible = false;
       state.activeRect = null;
       if (!state.pinned) state.activeSurface = null;
@@ -245,11 +333,17 @@
 
   function setShellRect(rect) {
     ensureOverlay();
+    if (topLayerModalOpen()) {
+      hideOverlay(true);
+      return;
+    }
     if (!rect) {
       hideOverlay(true);
       return;
     }
     state.activeRect = rect;
+    state.shell.classList.remove('preview');
+    setDimmers(rect, true);
     state.shell.style.left = `${Math.round(rect.left)}px`;
     state.shell.style.top = `${Math.round(rect.top)}px`;
     state.shell.style.width = `${Math.max(0, Math.round(rect.width))}px`;
@@ -258,17 +352,34 @@
     state.visible = true;
   }
 
+  function setPreviewRect(rect) {
+    ensureOverlay();
+    if (!rect || state.visible || state.pinned) return;
+    state.shell.classList.add('preview', 'visible');
+    state.shell.style.left = `${Math.round(rect.left)}px`;
+    state.shell.style.top = `${Math.round(rect.top)}px`;
+    state.shell.style.width = `${Math.max(0, Math.round(rect.width))}px`;
+    state.shell.style.height = `${Math.max(0, Math.round(rect.height))}px`;
+  }
+
   function rectForElement(el) {
     if (!el || !document.contains(el)) return null;
     const r = el.getBoundingClientRect();
     if (!r.width || !r.height) return null;
-    const left = clamp(r.left - state.settings.paddingX, 0, window.innerWidth);
-    const top = clamp(r.top - state.settings.paddingY, 0, window.innerHeight);
-    const right = clamp(r.right + state.settings.paddingX, 0, window.innerWidth);
-    const bottom = clamp(r.bottom + state.settings.paddingY, 0, window.innerHeight);
+    if (r.right <= 0 || r.left >= window.innerWidth || r.bottom <= 0 || r.top >= window.innerHeight) return null;
+    const left = r.left - state.settings.paddingX;
+    const top = r.top - state.settings.paddingY;
+    const right = r.right + state.settings.paddingX;
+    const bottom = r.bottom + state.settings.paddingY;
     const width = right - left;
     const height = bottom - top;
-    if (width < 40 || height < 28) return null;
+    if (r.width < 40 || r.height < 28) return null;
+    if (state.settings.focusMode === 'band') {
+      const bandHeight = Math.min(height, Math.max(96, window.innerHeight * 0.28));
+      const bandCenter = readingBandPoint().y;
+      const bandTop = clamp(bandCenter - bandHeight / 2, top, bottom - bandHeight);
+      return { left, top: bandTop, width, height: bandHeight, right, bottom: bandTop + bandHeight };
+    }
     return { left, top, width, height, right, bottom };
   }
 
@@ -306,12 +417,12 @@
     return tokens.some((token) => str.includes(String(token).toLowerCase()));
   }
 
-  function isVisible(el) {
+  function isVisible(el, rect = null, style = null) {
     if (!el || !document.contains(el)) return false;
-    const r = el.getBoundingClientRect();
+    const r = rect || el.getBoundingClientRect();
     if (!r.width || !r.height) return false;
     if (r.bottom <= 0 || r.top >= window.innerHeight || r.right <= 0 || r.left >= window.innerWidth) return false;
-    const s = getComputedStyle(el);
+    const s = style || getComputedStyle(el);
     return s.display !== 'none' && s.visibility !== 'hidden' && Number(s.opacity || '1') > 0.01;
   }
 
@@ -331,14 +442,14 @@
     return !!(el && el.matches && el.matches(INTERACTIVE_SELECTOR));
   }
 
-  function repeatedSiblingPattern(el) {
+  function repeatedSiblingPattern(el, baseRect = null) {
     const parent = el?.parentElement;
     if (!parent) return 0;
     const children = [...parent.children].filter((child) => isVisible(child));
     if (children.length < 4) return 0;
     const sameTag = children.filter((child) => child.tagName === el.tagName).length;
     let similar = 0;
-    const base = el.getBoundingClientRect();
+    const base = baseRect || el.getBoundingClientRect();
     for (const child of children.slice(0, 12)) {
       const r = child.getBoundingClientRect();
       if (Math.abs(r.height - base.height) < Math.max(24, base.height * 0.35) && Math.abs(r.width - base.width) < Math.max(40, base.width * 0.35)) {
@@ -346,6 +457,17 @@
       }
     }
     return (sameTag + similar) / 2;
+  }
+
+  function pointerPoint() {
+    return { x: state.pointerX, y: state.pointerY };
+  }
+
+  function readingBandPoint() {
+    return {
+      x: Math.round(window.innerWidth * 0.5),
+      y: Math.round(window.innerHeight * clamp(Number(state.settings.readingBandY) || 0.42, 0.2, 0.75))
+    };
   }
 
   function findInteractionShell(start) {
@@ -390,7 +512,7 @@
     const candidates = new Set();
     const base = document.elementFromPoint(x, y);
     if (!base) return [];
-    let node = base.nodeType === Node.TEXT_NODE ? base.parentElement : base;
+    let node = base;
     while (node && node !== document.body && node !== document.documentElement) {
       candidates.add(node);
       const preferred = closestAny(node, state.siteProfile?.surfaceSelectors);
@@ -414,11 +536,13 @@
   }
 
   function candidateScore(el, point, family) {
-    if (!el || !isVisible(el)) return -Infinity;
+    if (!el || !document.contains(el)) return -Infinity;
     if (matchesAny(el, state.siteProfile?.rejectSelectors) || containsRejectToken(el)) return -Infinity;
     const style = getComputedStyle(el);
+    if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity || '1') <= 0.01) return -Infinity;
     if ((style.position === 'fixed' || style.position === 'sticky') && !isEditable(el) && !isInteractive(el)) return -90;
     const r = el.getBoundingClientRect();
+    if (!isVisible(el, r, style)) return -Infinity;
     const viewportArea = Math.max(1, window.innerWidth * window.innerHeight);
     const area = Math.max(1, r.width * r.height);
     const areaRatio = area / viewportArea;
@@ -430,10 +554,10 @@
     if (matchesAny(el, state.siteProfile?.quickSelectors)) score += 4;
     if (el.tagName.toLowerCase() === 'article' || el.getAttribute('role') === 'article' || el.tagName.toLowerCase() === 'main') score += 10;
 
-    const textLen = (el.innerText || '').trim().length;
+    const textLen = (el.textContent || '').trim().length;
     const interactiveCount = el.querySelectorAll?.('button, [role="button"], input, textarea, select, a[href]').length || 0;
-    const paragraphCount = el.querySelectorAll?.('p, li, blockquote').length || 0;
-    const rowLike = repeatedSiblingPattern(el);
+    const paragraphCount = family === 'read' ? el.querySelectorAll?.('p, li, blockquote').length || 0 : 0;
+    const rowLike = family === 'compare' ? repeatedSiblingPattern(el, r) : 0;
 
     if (family === 'read') {
       score += Math.min(textLen / 80, 28);
@@ -452,7 +576,6 @@
       if (areaRatio > 0.96) score -= 12;
     }
 
-    if (containsRejectToken(el)) score -= 20;
     return score;
   }
 
@@ -469,14 +592,15 @@
     }
 
     if (!best || bestScore < -10) {
-      const fallback = closestAny(document.elementFromPoint(point.x, point.y), state.siteProfile?.fallbackSelectors) || document.querySelector(selectorList(state.siteProfile?.fallbackSelectors).join(','));
+      const fallbackSelectors = selectorList(state.siteProfile?.fallbackSelectors);
+      const fallback = closestAny(document.elementFromPoint(point.x, point.y), fallbackSelectors)
+        || (fallbackSelectors.length ? document.querySelector(fallbackSelectors.join(',')) : null);
       if (fallback && isVisible(fallback)) best = fallback;
     }
     return best;
   }
 
-  function nearestSurfaceFromPointer(family, sourceEl = null) {
-    const point = { x: state.pointerX, y: state.pointerY };
+  function nearestSurfaceFromPoint(family, point, sourceEl = null) {
     if (family === 'create' || family === 'act') {
       const origin = sourceEl || document.elementFromPoint(point.x, point.y) || document.activeElement;
       return findInteractionShell(origin);
@@ -485,14 +609,20 @@
       const origin = sourceEl || document.elementFromPoint(point.x, point.y);
       return findComparativeShell(origin) || bestSurfaceNearPoint(point, family);
     }
+    if (family === 'read') {
+      const origin = sourceEl || document.elementFromPoint(point.x, point.y);
+      const direct = closestAny(origin, [
+        ...selectorList(state.siteProfile?.surfaceSelectors),
+        ...selectorList(state.siteProfile?.preferSelectors),
+        ...selectorList(state.siteProfile?.quickSelectors)
+      ]);
+      if (direct && isVisible(direct)) return direct;
+    }
     return bestSurfaceNearPoint(point, family);
   }
 
-  function surfaceFamilyForReason(reason) {
-    if (reason === 'compare') return 'compare';
-    if (reason === 'create') return 'create';
-    if (reason === 'act') return 'act';
-    return pageFamily();
+  function nearestSurfaceFromPointer(family, sourceEl = null) {
+    return nearestSurfaceFromPoint(family, pointerPoint(), sourceEl);
   }
 
   function activeTyping() {
@@ -523,7 +653,7 @@
     if (surface.parentElement) state.resizeObserver.observe(surface.parentElement);
 
     state.mutationObserver = new MutationObserver(() => scheduleSurfaceRefresh('mutation'));
-    state.mutationObserver.observe(surface.parentElement || surface, { childList: true, subtree: true, attributes: true, characterData: false });
+    state.mutationObserver.observe(surface, { childList: true, subtree: true, characterData: true });
   }
 
   function clearObservers() {
@@ -575,13 +705,21 @@
   }
 
   function scheduleSurfaceRefresh(_reason) {
+    if (_reason === 'mutation') {
+      clearTimeout(state.mutationRefreshTimer);
+      state.mutationRefreshTimer = setTimeout(() => {
+        state.mutationRefreshTimer = null;
+        refreshActiveSurface();
+      }, 140);
+      return;
+    }
     cancelAnimationFrame(state.rafId);
     state.rafId = requestAnimationFrame(() => refreshActiveSurface());
   }
 
   function scheduleReacquire() {
     clearTimeout(state.transitionTimer);
-    const delay = Math.max(120, autoAcquireCooldownRemaining());
+    const delay = Math.max(120, effectiveAutoAcquireDelay());
     state.transitionTimer = setTimeout(() => {
       if (!canAutoRun() || state.pinned) return;
       acquireSurface('transition');
@@ -590,13 +728,29 @@
 
   function clearTimers() {
     clearTimeout(state.hoverTimer);
+    clearTimeout(state.previewTimer);
     clearTimeout(state.scrollTimer);
     clearTimeout(state.transitionTimer);
-    state.hoverTimer = state.scrollTimer = state.transitionTimer = null;
+    clearTimeout(state.mutationRefreshTimer);
+    clearTimeout(state.routeCheckTimer);
+    clearInterval(state.routePollId);
+    clearHideTimer();
+    cancelAnimationFrame(state.rafId);
+    state.hoverTimer = state.previewTimer = state.scrollTimer = state.transitionTimer = null;
+    state.mutationRefreshTimer = state.routeCheckTimer = null;
+    state.routePollId = null;
+    state.rafId = 0;
   }
 
   function autoAcquireCooldownRemaining() {
     return Math.max(0, state.nextAutoAcquireAt - nowTs());
+  }
+
+  function effectiveAutoAcquireDelay() {
+    if (state.actionLockEl && !activeTyping()) {
+      return Math.min(autoAcquireCooldownRemaining(), Math.max(0, state.actionUntil - nowTs()));
+    }
+    return autoAcquireCooldownRemaining();
   }
 
   function bumpAutoAcquireCooldown(ms = state.settings.refocusCooldownMs || 5000) {
@@ -605,7 +759,8 @@
   }
 
   function autoAcquireBlocked(reason) {
-    if (reason === 'manual' || reason === 'click' || reason === 'focus' || reason === 'keydown') return false;
+    if (reason === 'manual' || reason === 'click' || reason === 'focus' || reason === 'keydown' || reason === 'scroll') return false;
+    if (state.actionLockEl && !activeTyping() && nowTs() >= state.actionUntil) return false;
     return autoAcquireCooldownRemaining() > 0;
   }
 
@@ -619,6 +774,7 @@
 
     let family = pageFamily();
     let sourceEl = null;
+    let point = pointerPoint();
 
     if (actionSurfaceShouldWin()) {
       family = state.actionLockMode || 'create';
@@ -634,12 +790,14 @@
 
     if (reason === 'scroll' && !actionSurfaceShouldWin()) {
       family = pageFamily();
+      sourceEl = null;
+      point = readingBandPoint();
     }
 
-    let surface = nearestSurfaceFromPointer(family, sourceEl);
+    let surface = nearestSurfaceFromPoint(family, point, sourceEl);
 
     if (!surface && family !== 'read') {
-      surface = nearestSurfaceFromPointer(pageFamily());
+      surface = nearestSurfaceFromPoint(pageFamily(), point);
       family = pageFamily();
     }
 
@@ -655,16 +813,27 @@
   function queueHoverAcquire() {
     clearTimeout(state.hoverTimer);
     if (!canAutoRun() || !state.settings.autoOnHover || state.pinned) return;
-    const delay = Math.max(state.settings.dwellMs, autoAcquireCooldownRemaining());
+    const delay = Math.max(state.settings.dwellMs, effectiveAutoAcquireDelay());
     state.hoverTimer = setTimeout(() => {
       acquireSurface('hover');
     }, delay);
   }
 
+  function queueBoundaryPreview() {
+    clearTimeout(state.previewTimer);
+    if (!canAutoRun() || !state.settings.autoOnHover || state.pinned || state.visible) return;
+    state.previewTimer = setTimeout(() => {
+      if (!canAutoRun() || state.pinned || state.visible) return;
+      const surface = nearestSurfaceFromPointer(pageFamily());
+      const rect = rectForElement(surface);
+      if (rect) setPreviewRect(rect);
+    }, 120);
+  }
+
   function queueScrollAcquire() {
     clearTimeout(state.scrollTimer);
     if (!canAutoRun() || !state.settings.autoOnScroll || state.pinned) return;
-    const delay = Math.max(state.settings.scrollIdleMs, autoAcquireCooldownRemaining());
+    const delay = Math.max(state.settings.scrollIdleMs, effectiveAutoAcquireDelay());
     state.scrollTimer = setTimeout(() => {
       acquireSurface('scroll');
     }, delay);
@@ -675,11 +844,6 @@
     state.actionLockMode = mode;
     state.actionUntil = nowTs() + state.settings.actionLockMs;
     state.lastInteractionAt = nowTs();
-  }
-
-  function currentPointerElement() {
-    const el = document.elementFromPoint(state.pointerX, state.pointerY);
-    return el && el.nodeType === Node.TEXT_NODE ? el.parentElement : el;
   }
 
   function maybeHideOnPointerExit() {
@@ -699,19 +863,33 @@
     state.hasUserInteracted = true;
 
     if (moved >= state.settings.stationaryTolerance) {
+      if (state.visible && state.activeRect && pointInsideRect(state.pointerX, state.pointerY, state.activeRect, 0)) {
+        maybeHideOnPointerExit();
+        return;
+      }
       bumpAutoAcquireCooldown();
       if (!state.pinned && state.visible) hideOverlay(true);
+      queueBoundaryPreview();
       queueHoverAcquire();
     }
     maybeHideOnPointerExit();
   }
 
-  function onScroll() {
+  function onScroll(event) {
+    const target = event?.target;
+    const isDocumentScroll = target === document || target === window || target === document.documentElement || target === document.body || target === document.scrollingElement;
+    if (!isDocumentScroll && !state.activeSurface) return;
     state.hasUserInteracted = true;
     state.lastScrollAt = nowTs();
+    clearTimeout(state.hoverTimer);
+    clearTimeout(state.previewTimer);
+    state.hoverTimer = state.previewTimer = null;
     bumpAutoAcquireCooldown();
-    if (!state.pinned && state.visible) hideOverlay(true);
     if (state.activeSurface && !state.pinned) scheduleSurfaceRefresh('scroll');
+    else if (!state.pinned) {
+      if (state.visible) hideOverlay(true);
+      else clearPreview();
+    }
     queueScrollAcquire();
   }
 
@@ -744,17 +922,22 @@
       return;
     }
 
-    if (event.shiftKey && canManualRun()) {
+    if (event.shiftKey && canManualRun() && (getSelection()?.isCollapsed ?? true)) {
       const surface = nearestSurfaceFromPointer(pageFamily(), target);
       if (surface) switchSurface(surface, pageFamily(), { pin: true });
     }
   }
 
   function onKeyDown(event) {
-    if (isEditable(document.activeElement)) {
+    const activeElement = document.activeElement;
+    if (isEditable(activeElement)) {
       state.lastKeyAt = nowTs();
-      recordActionLock(document.activeElement, 'create');
-      if (canAutoRun()) switchSurface(findInteractionShell(document.activeElement), 'create');
+      recordActionLock(activeElement, 'create');
+      if (state.activeMode === 'create' && state.activeSurface?.contains(activeElement)) {
+        if (canAutoRun()) scheduleSurfaceRefresh('keydown');
+        return;
+      }
+      if (canAutoRun()) switchSurface(findInteractionShell(activeElement), 'create');
       return;
     }
     if (event.key === 'Escape') {
@@ -769,12 +952,12 @@
 
   function loadSettings() {
     return new Promise((resolve) => {
-      storage.get(DEFAULTS, (items) => resolve({ ...DEFAULTS, ...(items || {}) }));
+      storage.get(null, (items) => resolve(normalizeSettings(items || {})));
     });
   }
 
   function applySettings(newSettings) {
-    state.settings = { ...DEFAULTS, ...(newSettings || {}) };
+    state.settings = normalizeSettings(newSettings || {});
     applyVisualSettings();
     if (!canManualRun()) {
       state.pinned = false;
@@ -787,7 +970,6 @@
   function runtimeState() {
     return {
       pausedForTab: state.pausedForTab,
-      ignored: domainIgnored(),
       hostname: location.hostname,
       siteMode: currentSiteMode(),
       autoBlockedReason: autoBlockedReason(),
@@ -796,8 +978,15 @@
     };
   }
 
+  function pushRuntimeState() {
+    try {
+      chrome.runtime.sendMessage({ type: 'UMBRA_STATE_PUSH', state: runtimeState() })?.catch?.(() => {});
+    } catch (_) {}
+  }
+
   function setupRuntime() {
-    chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    state.runtimeMessageHandler = (message, _sender, sendResponse) => {
+      try {
       if (!message || typeof message !== 'object') return;
       if (message.type === 'UMBRA_GET_STATE') {
         sendResponse(runtimeState());
@@ -812,6 +1001,7 @@
         } else {
           scheduleReacquire();
         }
+        pushRuntimeState();
         sendResponse({ pausedForTab: state.pausedForTab });
         return true;
       }
@@ -832,18 +1022,137 @@
         return true;
       }
       return false;
-    });
+      } catch (err) {
+        log('message handler error', err);
+        try {
+          sendResponse({ ok: false, error: 'UMBRA_CONTEXT_ERROR' });
+        } catch (_) {}
+        return true;
+      }
+    };
+    chrome.runtime.onMessage.addListener(state.runtimeMessageHandler);
   }
 
   function setupStorageWatcher() {
-    chrome.storage.onChanged.addListener((changes, areaName) => {
+    state.storageChangedHandler = (changes, areaName) => {
       if (areaName !== 'sync') return;
       const updates = {};
       for (const [key, payload] of Object.entries(changes)) updates[key] = payload.newValue;
       applySettings({ ...state.settings, ...updates });
       state.siteProfile = resolveSiteProfile();
+      pushRuntimeState();
       scheduleReacquire();
-    });
+    };
+    chrome.storage.onChanged.addListener(state.storageChangedHandler);
+  }
+
+  function handleLocationChange() {
+    if (location.href === state.lastHref) return false;
+    state.lastHref = location.href;
+    state.siteProfile = resolveSiteProfile();
+    state.pinned = false;
+    state.activeSurface = null;
+    state.activeMode = null;
+    clearObservers();
+    hideOverlay(true);
+    pushRuntimeState();
+    scheduleReacquire();
+    return true;
+  }
+
+  function queueLocationCheck() {
+    clearTimeout(state.routeCheckTimer);
+    state.routeCheckTimer = setTimeout(() => {
+      state.routeCheckTimer = null;
+      handleLocationChange();
+    }, 80);
+  }
+
+  function onNavigationNavigate(event) {
+    if (event?.finished && typeof event.finished.then === 'function') {
+      event.finished.then(queueLocationCheck).catch(queueLocationCheck);
+      return;
+    }
+    queueLocationCheck();
+  }
+
+  function onPopState() {
+    queueLocationCheck();
+  }
+
+  function setupRouteWatcher() {
+    state.lastHref = location.href;
+    if (globalThis.navigation?.addEventListener) {
+      state.navigationHandler = onNavigationNavigate;
+      globalThis.navigation.addEventListener('navigate', state.navigationHandler);
+      return;
+    }
+    window.addEventListener('popstate', onPopState);
+    state.routePollId = setInterval(handleLocationChange, 500);
+  }
+
+  function onResize() {
+    scheduleSurfaceRefresh('resize');
+  }
+
+  function onVisibilityChange() {
+    if (document.hidden) hideOverlay(true);
+    else scheduleReacquire();
+  }
+
+  function teardown() {
+    window.removeEventListener('mousemove', onPointerMove);
+    document.removeEventListener('scroll', onScroll, true);
+    window.removeEventListener('resize', onResize);
+    document.removeEventListener('focusin', onFocusIn, true);
+    document.removeEventListener('click', onClick, true);
+    document.removeEventListener('keydown', onKeyDown, true);
+    document.removeEventListener('visibilitychange', onVisibilityChange);
+    window.removeEventListener('pagehide', onPageHide);
+    window.removeEventListener('popstate', onPopState);
+    if (state.navigationHandler && globalThis.navigation?.removeEventListener) {
+      globalThis.navigation.removeEventListener('navigate', state.navigationHandler);
+    }
+    if (state.runtimeMessageHandler) {
+      chrome.runtime.onMessage.removeListener(state.runtimeMessageHandler);
+    }
+    if (state.storageChangedHandler) {
+      chrome.storage.onChanged.removeListener(state.storageChangedHandler);
+    }
+    clearObservers();
+    clearTimers();
+    state.overlayHost?.remove();
+    state.overlayHost = null;
+    state.overlayShadow = null;
+    state.shell = null;
+    state.dimmers = null;
+    state.activeSurface = null;
+    state.activeRect = null;
+    state.activeMode = null;
+    state.visible = false;
+    state.navigationHandler = null;
+    state.runtimeMessageHandler = null;
+    state.storageChangedHandler = null;
+    globalThis.__umbraInjected = false;
+  }
+
+  function onPageHide() {
+    teardown();
+  }
+
+  if (globalThis.__UMBRA_TEST_HOOKS__) {
+    globalThis.UMBRA_TEST_API = {
+      state,
+      clamp,
+      distance,
+      normalizeHost,
+      candidateScore,
+      repeatedSiblingPattern,
+      pageFamily,
+      rectForElement,
+      handleLocationChange,
+      teardown
+    };
   }
 
   async function mount() {
@@ -852,19 +1161,19 @@
     ensureOverlay();
     setupRuntime();
     setupStorageWatcher();
+    setupRouteWatcher();
 
     window.addEventListener('mousemove', onPointerMove, { passive: true });
-    window.addEventListener('scroll', onScroll, { passive: true });
-    window.addEventListener('resize', () => scheduleSurfaceRefresh('resize'), { passive: true });
+    document.addEventListener('scroll', onScroll, { capture: true, passive: true });
+    window.addEventListener('resize', onResize, { passive: true });
     document.addEventListener('focusin', onFocusIn, true);
     document.addEventListener('click', onClick, true);
     document.addEventListener('keydown', onKeyDown, true);
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden) hideOverlay(true);
-      else scheduleReacquire();
-    });
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('pagehide', onPageHide);
 
     if (!canManualRun()) hideOverlay(true);
+    pushRuntimeState();
   }
 
   mount().catch((err) => console.error('[Umbra2 mount error]', err));
