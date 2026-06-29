@@ -46,6 +46,7 @@ Umbra is built around a small rule engine:
 - Hotkeys: `Alt+Shift+U` pauses the current tab, `Alt+Shift+F` forces focus now.
 - Shift + Click pins the surface under the pointer.
 - Escape clears the current focus and releases pinning.
+- Toolbar badge: the action icon shows the current tab's state at a glance — `OFF` when disabled or set to Off, `II` when paused on the tab, `M` in Manual mode, and nothing when auto-focus is active.
 
 Chrome extension shortcuts can be remapped. This matters on Windows/Linux setups where `Alt+Shift` is used for keyboard layout switching.
 

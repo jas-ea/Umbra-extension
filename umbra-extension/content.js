@@ -300,6 +300,10 @@
     for (const dimmer of state.dimmers) dimmer.classList.remove('visible');
   }
 
+  function clearPreview() {
+    if (state.shell && !state.visible) state.shell.classList.remove('preview', 'visible');
+  }
+
   function clearHideTimer() {
     if (state.hideTimer) {
       clearTimeout(state.hideTimer);
@@ -588,7 +592,9 @@
     }
 
     if (!best || bestScore < -10) {
-      const fallback = closestAny(document.elementFromPoint(point.x, point.y), state.siteProfile?.fallbackSelectors) || document.querySelector(selectorList(state.siteProfile?.fallbackSelectors).join(','));
+      const fallbackSelectors = selectorList(state.siteProfile?.fallbackSelectors);
+      const fallback = closestAny(document.elementFromPoint(point.x, point.y), fallbackSelectors)
+        || (fallbackSelectors.length ? document.querySelector(fallbackSelectors.join(',')) : null);
       if (fallback && isVisible(fallback)) best = fallback;
     }
     return best;
@@ -880,7 +886,10 @@
     state.hoverTimer = state.previewTimer = null;
     bumpAutoAcquireCooldown();
     if (state.activeSurface && !state.pinned) scheduleSurfaceRefresh('scroll');
-    else if (!state.pinned && state.visible) hideOverlay(true);
+    else if (!state.pinned) {
+      if (state.visible) hideOverlay(true);
+      else clearPreview();
+    }
     queueScrollAcquire();
   }
 
@@ -969,6 +978,12 @@
     };
   }
 
+  function pushRuntimeState() {
+    try {
+      chrome.runtime.sendMessage({ type: 'UMBRA_STATE_PUSH', state: runtimeState() })?.catch?.(() => {});
+    } catch (_) {}
+  }
+
   function setupRuntime() {
     state.runtimeMessageHandler = (message, _sender, sendResponse) => {
       try {
@@ -986,6 +1001,7 @@
         } else {
           scheduleReacquire();
         }
+        pushRuntimeState();
         sendResponse({ pausedForTab: state.pausedForTab });
         return true;
       }
@@ -1024,6 +1040,7 @@
       for (const [key, payload] of Object.entries(changes)) updates[key] = payload.newValue;
       applySettings({ ...state.settings, ...updates });
       state.siteProfile = resolveSiteProfile();
+      pushRuntimeState();
       scheduleReacquire();
     };
     chrome.storage.onChanged.addListener(state.storageChangedHandler);
@@ -1038,6 +1055,7 @@
     state.activeMode = null;
     clearObservers();
     hideOverlay(true);
+    pushRuntimeState();
     scheduleReacquire();
     return true;
   }
@@ -1155,6 +1173,7 @@
     window.addEventListener('pagehide', onPageHide);
 
     if (!canManualRun()) hideOverlay(true);
+    pushRuntimeState();
   }
 
   mount().catch((err) => console.error('[Umbra2 mount error]', err));

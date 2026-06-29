@@ -14,6 +14,8 @@
 - Unified per-site suppression around site modes.
 - Added unit and Playwright fixture coverage for geometry, mutation debounce, route changes, media settings, and Shift+Click text selection.
 - Added viewport reading-band scroll targeting, pre-dwell boundary preview, dim tint/feather/solid-dim/focus-shape customization, transformed-root dimming coverage, native modal suppression, storage write hygiene, and shortcut caveat documentation.
+- Added a per-tab toolbar state badge (off / paused / manual) so Umbra's status is visible without opening the popup.
+- Hardened fallback surface selection against empty selector lists and cleared lingering boundary-preview outlines on scroll.
 
 ## 2.0.2
 

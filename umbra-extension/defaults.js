@@ -101,10 +101,20 @@
     return { set, remove };
   }
 
+  function badgeForState(state) {
+    if (!state) return { text: "", color: "#5b8def" };
+    if (state.autoBlockedReason === "disabled") return { text: "OFF", color: "#9aa0a6" };
+    if (state.pausedForTab) return { text: "II", color: "#f5a623" };
+    if (state.siteMode === "off") return { text: "OFF", color: "#9aa0a6" };
+    if (state.siteMode === "manual") return { text: "M", color: "#5b8def" };
+    return { text: "", color: "#5b8def" };
+  }
+
   globalThis.UMBRA_DEFAULTS = DEFAULTS;
   globalThis.UMBRA_LEGACY_STORAGE_KEYS = LEGACY_STORAGE_KEYS;
   globalThis.UMBRA_MAX_SITE_OVERRIDES = MAX_SITE_OVERRIDES;
   globalThis.UMBRA_NORMALIZE_SETTINGS = normalizeSettings;
   globalThis.UMBRA_STORAGE_MIGRATION = storageMigrationPatch;
   globalThis.UMBRA_NORMALIZE_HOST = normalizeHost;
+  globalThis.UMBRA_BADGE_FOR_STATE = badgeForState;
 })();
