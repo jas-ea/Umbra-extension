@@ -875,6 +875,9 @@
     if (!isDocumentScroll && !state.activeSurface) return;
     state.hasUserInteracted = true;
     state.lastScrollAt = nowTs();
+    clearTimeout(state.hoverTimer);
+    clearTimeout(state.previewTimer);
+    state.hoverTimer = state.previewTimer = null;
     bumpAutoAcquireCooldown();
     if (state.activeSurface && !state.pinned) scheduleSurfaceRefresh('scroll');
     else if (!state.pinned && state.visible) hideOverlay(true);
