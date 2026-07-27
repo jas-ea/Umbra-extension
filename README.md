@@ -10,8 +10,8 @@ Current extension source lives in `umbra-extension/`.
 
 - Detects reading intent from hover dwell and scroll-stop behavior.
 - Keeps the real page interactive and dims around the selected block.
-- Supports per-site modes from the popup: Auto, Manual, and Off.
-- Provides Focus now, Pin block, Pause on this tab, Shift+Click pin, and Escape clear.
+- Supports per-site modes from a collapsed popup section: Auto, Manual, and Off.
+- Provides Focus, Pin, Pause on this tab, Shift+Click pin, and Escape clear.
 - Respects reduced-motion and forced-colors settings in the overlay.
 - Runs locally with no analytics, telemetry, cloud inference, or remote code.
 
@@ -64,11 +64,11 @@ Chrome lets users remap extension shortcuts. This is useful on systems where `Al
 Open the Umbra toolbar popup to control:
 
 - Global enable/disable
-- Current site mode: Auto / Manual / Off
-- Focus now
-- Pin block
+- Focus
+- Pin
 - Pause on this tab
-- Advanced settings entry point
+- Current site mode: Auto / Manual / Off, collapsed under Site behavior
+- Settings entry point
 
 ---
 

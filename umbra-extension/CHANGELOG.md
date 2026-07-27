@@ -1,5 +1,22 @@
 # Changelog
 
+## 2.2.2
+
+- Tuned the default focus corner radius down to a cleaner, slightly rounded shape.
+
+## 2.2.1
+
+- Fixed hover focus so normal pointer dwell is not delayed by the refocus cooldown.
+- Improved generic read targeting so cards, messages, posts, and article-like surfaces beat broad page shells.
+
+## 2.2.0
+
+- Simplified the popup around daily controls and moved per-site behavior behind a collapsed section.
+- Removed always-visible dwell and intensity controls from the popup while keeping advanced tuning in Settings.
+- Replaced rectangular dimmer slices with a single rounded cutout mask for the focus overlay.
+- Made Focus and Pin target the focused element or viewport reading band before falling back to pointer position.
+- Added popup-side same-page injection for install/update recovery instead of showing a reload prompt on scriptable pages.
+
 ## 2.1.0
 
 - Added product pillars and a repeatable CI/tooling foundation.

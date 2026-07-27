@@ -1,6 +1,15 @@
 
 (() => {
-  if (globalThis.__umbraInjected) return;
+  const RUNTIME_VERSION = '2.2.2';
+  const previousRuntime = globalThis.UMBRA_RUNTIME;
+  if (previousRuntime?.version === RUNTIME_VERSION) return;
+  if (previousRuntime?.teardown) {
+    try {
+      previousRuntime.teardown();
+    } catch (_) {}
+  } else {
+    document.getElementById('umbra-overlay-host')?.remove();
+  }
   globalThis.__umbraInjected = true;
 
   const settingsDefaults = globalThis.UMBRA_DEFAULTS;
@@ -17,6 +26,21 @@
     'textarea', 'input:not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"])',
     '[contenteditable="true"]', '[contenteditable="plaintext-only"]',
     '[role="textbox"]'
+  ].join(',');
+
+  const READ_SURFACE_SELECTOR = [
+    'article',
+    '[role="article"]',
+    '[data-message-author-role]',
+    '[data-testid*="message" i]',
+    '[data-testid*="card" i]',
+    '[class*="card" i]',
+    '[class*="message" i]',
+    '[class*="post" i]',
+    '[class*="story" i]',
+    '[class*="note" i]',
+    '.prose',
+    '.entry-content'
   ].join(',');
 
   const state = {
@@ -46,8 +70,9 @@
     nextAutoAcquireAt: 0,
     overlayHost: null,
     overlayShadow: null,
+    mask: null,
+    maskPath: null,
     shell: null,
-    dimmers: null,
     visible: false,
     resizeObserver: null,
     mutationObserver: null,
@@ -93,10 +118,10 @@
       defaultMode: 'auto',
       quickSelectors: ['article', 'main', 'section'],
       preferSelectors: ['article', 'main', 'section'],
-      surfaceSelectors: ['article', 'main', 'section', '[role="article"]', '[role="main"]'],
+      surfaceSelectors: ['article', '[role="article"]', '[data-message-author-role]', '[data-testid*="message" i]', '[data-testid*="card" i]', '[class*="card" i]', '[class*="message" i]', '[class*="post" i]', '[class*="story" i]', '[class*="note" i]', '.prose', '.entry-content'],
       rejectSelectors: ['aside', 'nav', 'header', 'footer'],
       rejectTokens: ['sidebar', 'menu', 'toolbar', 'banner', 'modal', 'dialog', 'popup', 'overlay', 'search', 'rail'],
-      fallbackSelectors: ['article', 'main', '[role="article"]', '[role="main"]']
+      fallbackSelectors: ['article', '[role="article"]', '[data-message-author-role]', '[class*="card" i]', 'main', '[role="main"]']
     };
   }
 
@@ -176,15 +201,20 @@
     const style = document.createElement('style');
     style.textContent = `
       :host { all: initial; }
-      .dimmer {
+      .mask {
         position: fixed;
+        inset: 0;
+        width: 100vw;
+        height: 100vh;
         pointer-events: none;
         opacity: 0;
-        background: rgba(var(--umbra-dim-rgb, 0,0,0), var(--umbra-opacity,0.58));
         transition: opacity 90ms ease;
         will-change: opacity;
       }
-      .dimmer.visible { opacity: 1; }
+      .mask.visible { opacity: 1; }
+      .mask path {
+        fill: rgba(var(--umbra-dim-rgb, 0,0,0), var(--umbra-opacity,0.58));
+      }
       .shell {
         position: fixed;
         left: 0;
@@ -193,7 +223,7 @@
         height: 0;
         opacity: 0;
         background: transparent;
-        border-radius: var(--umbra-radius, 18px);
+        border-radius: var(--umbra-radius, 12px);
         border: 1px solid var(--umbra-outline, rgba(255,255,255,0.10));
         box-shadow: 0 0 var(--umbra-edge-feather, 0px) rgba(var(--umbra-dim-rgb, 0,0,0), var(--umbra-opacity,0.58));
         transition:
@@ -215,20 +245,20 @@
           transition: opacity 90ms ease;
           will-change: opacity;
         }
-        .dimmer {
+        .mask {
           transition: opacity 90ms ease;
         }
       }
       @media (prefers-contrast: more) {
-        .dimmer {
-          background: rgba(0,0,0,0.70);
+        .mask path {
+          fill: rgba(0,0,0,0.70);
         }
         .shell {
           border-color: rgba(255,255,255,0.36);
         }
       }
       @media (forced-colors: active) {
-        .dimmer {
+        .mask {
           display: none;
         }
         .shell {
@@ -237,19 +267,22 @@
         }
       }
     `;
-    const dimmers = ['top', 'right', 'bottom', 'left'].map((name) => {
-      const dimmer = document.createElement('div');
-      dimmer.className = `dimmer ${name}`;
-      return dimmer;
-    });
+    const mask = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    mask.classList.add('mask');
+    mask.setAttribute('aria-hidden', 'true');
+    mask.setAttribute('focusable', 'false');
+    const maskPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    maskPath.setAttribute('fill-rule', 'evenodd');
+    mask.append(maskPath);
     const shell = document.createElement('div');
     shell.className = 'shell';
-    shadow.append(style, ...dimmers, shell);
+    shadow.append(style, mask, shell);
     document.documentElement.appendChild(host);
     state.overlayHost = host;
     state.overlayShadow = shadow;
+    state.mask = mask;
+    state.maskPath = maskPath;
     state.shell = shell;
-    state.dimmers = dimmers;
     applyVisualSettings();
   }
 
@@ -271,33 +304,53 @@
     return match.slice(1).map((part) => parseInt(part, 16));
   }
 
-  function setDimmers(rect, visible) {
-    if (!state.dimmers) return;
-    const [topDimmer, rightDimmer, bottomDimmer, leftDimmer] = state.dimmers;
-    const width = window.innerWidth;
-    const height = window.innerHeight;
-    const left = clamp(rect.left, 0, width);
-    const right = clamp(rect.right, 0, width);
-    const top = clamp(rect.top, 0, height);
-    const bottom = clamp(rect.bottom, 0, height);
-    const specs = [
-      [topDimmer, 0, 0, width, top],
-      [rightDimmer, right, top, Math.max(0, width - right), Math.max(0, bottom - top)],
-      [bottomDimmer, 0, bottom, width, Math.max(0, height - bottom)],
-      [leftDimmer, 0, top, left, Math.max(0, bottom - top)]
-    ];
-    for (const [node, x, y, w, h] of specs) {
-      node.style.left = `${Math.round(x)}px`;
-      node.style.top = `${Math.round(y)}px`;
-      node.style.width = `${Math.round(w)}px`;
-      node.style.height = `${Math.round(h)}px`;
-      node.classList.toggle('visible', visible && w > 0 && h > 0);
+  function roundedCutoutPath(rect) {
+    const viewportWidth = Math.max(0, Math.round(window.innerWidth));
+    const viewportHeight = Math.max(0, Math.round(window.innerHeight));
+    const left = clamp(Math.round(rect.left), 0, viewportWidth);
+    const top = clamp(Math.round(rect.top), 0, viewportHeight);
+    const right = clamp(Math.round(rect.right), 0, viewportWidth);
+    const bottom = clamp(Math.round(rect.bottom), 0, viewportHeight);
+    const width = right - left;
+    const height = bottom - top;
+    const outer = `M0 0H${viewportWidth}V${viewportHeight}H0Z`;
+    if (width <= 0 || height <= 0) return outer;
+
+    const radius = Math.min(
+      Math.max(0, Number(state.settings.cornerRadius) || 0),
+      width / 2,
+      height / 2
+    );
+    if (!radius) {
+      return `${outer}M${left} ${top}H${right}V${bottom}H${left}Z`;
     }
+
+    return [
+      outer,
+      `M${left} ${top + radius}`,
+      `A${radius} ${radius} 0 0 1 ${left + radius} ${top}`,
+      `H${right - radius}`,
+      `A${radius} ${radius} 0 0 1 ${right} ${top + radius}`,
+      `V${bottom - radius}`,
+      `A${radius} ${radius} 0 0 1 ${right - radius} ${bottom}`,
+      `H${left + radius}`,
+      `A${radius} ${radius} 0 0 1 ${left} ${bottom - radius}`,
+      'Z'
+    ].join('');
   }
 
-  function hideDimmers() {
-    if (!state.dimmers) return;
-    for (const dimmer of state.dimmers) dimmer.classList.remove('visible');
+  function setMask(rect, visible) {
+    if (!state.mask || !state.maskPath) return;
+    const width = Math.max(0, Math.round(window.innerWidth));
+    const height = Math.max(0, Math.round(window.innerHeight));
+    state.mask.setAttribute('viewBox', `0 0 ${width} ${height}`);
+    state.maskPath.setAttribute('d', roundedCutoutPath(rect));
+    state.mask.classList.toggle('visible', !!visible);
+  }
+
+  function hideMask() {
+    if (!state.mask) return;
+    state.mask.classList.remove('visible');
   }
 
   function clearPreview() {
@@ -316,7 +369,7 @@
     if (!state.shell) return;
     if (immediate) {
       state.shell.classList.remove('visible', 'preview');
-      hideDimmers();
+      hideMask();
       state.visible = false;
       state.activeRect = null;
       if (!state.pinned) state.activeSurface = null;
@@ -324,7 +377,7 @@
     }
     state.hideTimer = setTimeout(() => {
       state.shell.classList.remove('visible', 'preview');
-      hideDimmers();
+      hideMask();
       state.visible = false;
       state.activeRect = null;
       if (!state.pinned) state.activeSurface = null;
@@ -343,7 +396,7 @@
     }
     state.activeRect = rect;
     state.shell.classList.remove('preview');
-    setDimmers(rect, true);
+    setMask(rect, true);
     state.shell.style.left = `${Math.round(rect.left)}px`;
     state.shell.style.top = `${Math.round(rect.top)}px`;
     state.shell.style.width = `${Math.max(0, Math.round(rect.width))}px`;
@@ -355,6 +408,7 @@
   function setPreviewRect(rect) {
     ensureOverlay();
     if (!rect || state.visible || state.pinned) return;
+    hideMask();
     state.shell.classList.add('preview', 'visible');
     state.shell.style.left = `${Math.round(rect.left)}px`;
     state.shell.style.top = `${Math.round(rect.top)}px`;
@@ -457,6 +511,23 @@
       }
     }
     return (sameTag + similar) / 2;
+  }
+
+  function readSurfaceChildCount(el) {
+    if (!el?.querySelectorAll) return 0;
+    try {
+      return [...el.querySelectorAll(READ_SURFACE_SELECTOR)]
+        .filter((child) => child !== el && isVisible(child))
+        .slice(0, 8)
+        .length;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  function isBroadReadContainer(el, areaRatio) {
+    const tag = el?.tagName?.toLowerCase();
+    return tag === 'main' || el?.getAttribute?.('role') === 'main' || areaRatio > 0.55;
   }
 
   function pointerPoint() {
@@ -563,6 +634,10 @@
       score += Math.min(textLen / 80, 28);
       score += Math.min(paragraphCount * 1.8, 10);
       score -= Math.min(interactiveCount, 20) * 0.8;
+      if (matchesAny(el, [READ_SURFACE_SELECTOR])) score += 12;
+      if (areaRatio >= 0.04 && areaRatio <= 0.42) score += 8;
+      if (areaRatio > 0.55) score -= Math.min((areaRatio - 0.55) * 48, 22);
+      if (isBroadReadContainer(el, areaRatio)) score -= Math.min(readSurfaceChildCount(el) * 7, 28);
       if (areaRatio > 0.9) score -= 18;
       if (areaRatio < 0.02) score -= 12;
     } else if (family === 'compare') {
@@ -609,20 +684,40 @@
       const origin = sourceEl || document.elementFromPoint(point.x, point.y);
       return findComparativeShell(origin) || bestSurfaceNearPoint(point, family);
     }
-    if (family === 'read') {
-      const origin = sourceEl || document.elementFromPoint(point.x, point.y);
-      const direct = closestAny(origin, [
-        ...selectorList(state.siteProfile?.surfaceSelectors),
-        ...selectorList(state.siteProfile?.preferSelectors),
-        ...selectorList(state.siteProfile?.quickSelectors)
-      ]);
-      if (direct && isVisible(direct)) return direct;
-    }
     return bestSurfaceNearPoint(point, family);
   }
 
   function nearestSurfaceFromPointer(family, sourceEl = null) {
     return nearestSurfaceFromPoint(family, pointerPoint(), sourceEl);
+  }
+
+  function visibleElementCenter(el) {
+    if (!el || el === document.body || el === document.documentElement || !isVisible(el)) return null;
+    const rect = el.getBoundingClientRect();
+    return {
+      x: clamp(rect.left + rect.width / 2, 0, window.innerWidth),
+      y: clamp(rect.top + rect.height / 2, 0, window.innerHeight)
+    };
+  }
+
+  function nearestManualSurface(family) {
+    const active = document.activeElement;
+    if (isEditable(active) || isInteractive(active)) {
+      const surface = findInteractionShell(active);
+      if (surface && isVisible(surface)) return { surface, family: isEditable(active) ? 'create' : 'act' };
+    }
+
+    const activePoint = visibleElementCenter(active);
+    if (activePoint) {
+      const activeSurface = nearestSurfaceFromPoint(family, activePoint, active);
+      if (activeSurface) return { surface: activeSurface, family };
+    }
+
+    const bandSurface = nearestSurfaceFromPoint(family, readingBandPoint());
+    if (bandSurface) return { surface: bandSurface, family };
+
+    const pointerSurface = nearestSurfaceFromPointer(family);
+    return pointerSurface ? { surface: pointerSurface, family } : null;
   }
 
   function activeTyping() {
@@ -753,13 +848,13 @@
     return autoAcquireCooldownRemaining();
   }
 
-  function bumpAutoAcquireCooldown(ms = state.settings.refocusCooldownMs || 5000) {
+  function bumpAutoAcquireCooldown(ms = state.settings.refocusCooldownMs ?? 5000) {
     const until = nowTs() + ms;
     if (until > state.nextAutoAcquireAt) state.nextAutoAcquireAt = until;
   }
 
   function autoAcquireBlocked(reason) {
-    if (reason === 'manual' || reason === 'click' || reason === 'focus' || reason === 'keydown' || reason === 'scroll') return false;
+    if (reason === 'manual' || reason === 'click' || reason === 'focus' || reason === 'keydown' || reason === 'scroll' || reason === 'hover') return false;
     if (state.actionLockEl && !activeTyping() && nowTs() >= state.actionUntil) return false;
     return autoAcquireCooldownRemaining() > 0;
   }
@@ -813,7 +908,7 @@
   function queueHoverAcquire() {
     clearTimeout(state.hoverTimer);
     if (!canAutoRun() || !state.settings.autoOnHover || state.pinned) return;
-    const delay = Math.max(state.settings.dwellMs, effectiveAutoAcquireDelay());
+    const delay = state.settings.dwellMs;
     state.hoverTimer = setTimeout(() => {
       acquireSurface('hover');
     }, delay);
@@ -1007,16 +1102,16 @@
       }
       if (message.type === 'UMBRA_FOCUS_NOW') {
         if (canManualRun()) {
-          const surface = nearestSurfaceFromPointer(pageFamily());
-          if (surface) switchSurface(surface, pageFamily());
+          const target = nearestManualSurface(pageFamily());
+          if (target?.surface) switchSurface(target.surface, target.family);
         }
         sendResponse({ ok: true });
         return true;
       }
       if (message.type === 'UMBRA_PIN_NOW') {
         if (canManualRun()) {
-          const surface = nearestSurfaceFromPointer(pageFamily());
-          if (surface) switchSurface(surface, pageFamily(), { pin: true });
+          const target = nearestManualSurface(pageFamily());
+          if (target?.surface) switchSurface(target.surface, target.family, { pin: true });
         }
         sendResponse({ ok: true });
         return true;
@@ -1124,8 +1219,9 @@
     state.overlayHost?.remove();
     state.overlayHost = null;
     state.overlayShadow = null;
+    state.mask = null;
+    state.maskPath = null;
     state.shell = null;
-    state.dimmers = null;
     state.activeSurface = null;
     state.activeRect = null;
     state.activeMode = null;
@@ -1133,6 +1229,7 @@
     state.navigationHandler = null;
     state.runtimeMessageHandler = null;
     state.storageChangedHandler = null;
+    globalThis.UMBRA_RUNTIME = null;
     globalThis.__umbraInjected = false;
   }
 
@@ -1156,6 +1253,7 @@
   }
 
   async function mount() {
+    globalThis.UMBRA_RUNTIME = { teardown, version: RUNTIME_VERSION };
     state.siteProfile = resolveSiteProfile();
     applySettings(await loadSettings());
     ensureOverlay();

@@ -68,8 +68,6 @@ describe("settings contract", () => {
   it("keeps popup settings controls backed by engine reads", () => {
     const popupSettingMap = {
       enabledToggle: "enabled",
-      dwellMs: "dwellMs",
-      overlayOpacity: "overlayOpacity",
       siteModeAuto: "siteOverrides",
       siteModeManual: "siteOverrides",
       siteModeOff: "siteOverrides",

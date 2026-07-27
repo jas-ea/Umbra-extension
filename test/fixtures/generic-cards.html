@@ -1,0 +1,48 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Umbra fixture - generic cards</title>
+  <style>
+    body { margin: 0; font: 16px/1.45 system-ui, sans-serif; background: #eef2f5; color: #111; }
+    .layout { display: grid; grid-template-columns: 260px 1fr 260px; gap: 24px; padding: 36px; }
+    nav, aside { background: #111827; color: #d7dee9; padding: 20px; border-radius: 10px; }
+    main { display: grid; gap: 18px; }
+    .card { background: white; border: 1px solid #d7dde3; border-radius: 14px; padding: 20px; }
+    .summary { width: 52%; }
+    button { margin-right: 10px; }
+  </style>
+</head>
+<body>
+  <script>window.__UMBRA_TEST_HOOKS__ = true;</script>
+  <div class="layout">
+    <nav>
+      <h2>Navigation</h2>
+      <p>Should not win focus.</p>
+      <button>New</button>
+      <button>Archive</button>
+    </nav>
+    <main>
+      <section id="summary" class="card summary">
+        <h2>Short summary</h2>
+        <p>Compact summary text near the pointer.</p>
+      </section>
+      <section id="target-card" class="card">
+        <h2>Detailed card</h2>
+        <p>This card is the intended readable unit inside a broad main container.</p>
+        <p>Umbra should prefer this card over the whole content column.</p>
+        <button>Reply</button>
+        <button>Save</button>
+      </section>
+      <section id="next-card" class="card">
+        <h2>Another card</h2>
+        <p>More readable material below the target.</p>
+      </section>
+    </main>
+    <aside>
+      <h2>Side panel</h2>
+      <p>Should not win focus.</p>
+    </aside>
+  </div>
+</body>
+</html>

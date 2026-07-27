@@ -100,23 +100,11 @@ async function shellInfo(page) {
   return page.evaluate(() => {
     const host = document.getElementById("umbra-overlay-host");
     const shell = host?.shadowRoot?.querySelector(".shell");
+    const mask = host?.shadowRoot?.querySelector(".mask");
+    const maskPath = mask?.querySelector("path");
     if (!host || !shell) return null;
     const rect = shell.getBoundingClientRect();
     const style = getComputedStyle(shell);
-    const dimmers = [...host.shadowRoot.querySelectorAll(".dimmer")].map(
-      (node) => {
-        const dimmerRect = node.getBoundingClientRect();
-        const dimmerStyle = getComputedStyle(node);
-        return {
-          visible: node.classList.contains("visible"),
-          left: dimmerRect.left,
-          top: dimmerRect.top,
-          width: dimmerRect.width,
-          height: dimmerRect.height,
-          backgroundColor: dimmerStyle.backgroundColor,
-        };
-      },
-    );
     return {
       visible: shell.classList.contains("visible"),
       preview: shell.classList.contains("preview"),
@@ -125,10 +113,13 @@ async function shellInfo(page) {
       width: rect.width,
       height: rect.height,
       borderTopColor: style.borderTopColor,
+      borderRadius: style.borderTopLeftRadius,
       boxShadow: style.boxShadow,
       transitionProperty: style.transitionProperty,
       ariaHidden: host.getAttribute("aria-hidden"),
-      dimmers,
+      maskVisible: mask?.classList.contains("visible") || false,
+      maskFill: maskPath ? getComputedStyle(maskPath).fill : "",
+      maskPath: maskPath?.getAttribute("d") || "",
     };
   });
 }
@@ -141,10 +132,23 @@ async function focusByHover(page, selector) {
   await expect
     .poll(async () => {
       const shell = await shellInfo(page);
-      return shell?.visible && !shell?.preview;
+      return shell?.visible && !shell?.preview && shell?.maskVisible;
     })
     .toBe(true);
   return box;
+}
+
+async function sendExtensionMessage(context, page, message) {
+  const worker = await serviceWorker(context);
+  return worker.evaluate(
+    async ({ pageUrl, payload }) => {
+      const tabs = await chrome.tabs.query({});
+      const tab = tabs.find((candidate) => candidate.url === pageUrl);
+      if (!tab?.id) return null;
+      return chrome.tabs.sendMessage(tab.id, payload);
+    },
+    { pageUrl: page.url(), payload: message },
+  );
 }
 
 function expectClose(actual, expected, tolerance = 3) {
@@ -190,6 +194,9 @@ test.describe("Umbra extension fixtures", () => {
     expectClose(shell.top, target.y - fastSettings.paddingY);
     expectClose(shell.width, target.width + fastSettings.paddingX * 2);
     expectClose(shell.height, target.height + fastSettings.paddingY * 2);
+    expect(shell.borderRadius).toBe("18px");
+    expect(shell.maskVisible).toBe(true);
+    expect(shell.maskPath).toContain("A18 18");
     expect(shell.borderTopColor).not.toBe("rgba(0, 0, 0, 0)");
 
     await updateExtensionSettings(context, { showOutline: false });
@@ -277,6 +284,60 @@ test.describe("Umbra extension fixtures", () => {
     await page.close();
   });
 
+  test("does not let refocus cooldown delay a settled hover", async () => {
+    const page = await context.newPage();
+    await setExtensionSettings(context, {
+      dwellMs: 120,
+      refocusCooldownMs: 5000,
+    });
+    await page.goto(`${server.origin}/article.html`);
+
+    const target = await page.locator("#target-article").boundingBox();
+    await page.mouse.move(
+      target.x + target.width / 2,
+      target.y + target.height / 2,
+    );
+
+    await expect
+      .poll(async () => {
+        const shell = await shellInfo(page);
+        return shell?.visible && !shell?.preview && shell?.maskVisible;
+      })
+      .toBe(true);
+    await page.close();
+  });
+
+  test("targets generic readable cards instead of the page shell", async () => {
+    const page = await context.newPage();
+    await page.goto(`${server.origin}/generic-cards.html`);
+    const target = await focusByHover(page, "#target-card");
+    const shell = await shellInfo(page);
+
+    expectClose(shell.left, target.x - fastSettings.paddingX);
+    expectClose(shell.top, target.y - fastSettings.paddingY);
+    expectClose(shell.width, target.width + fastSettings.paddingX * 2);
+    expectClose(shell.height, target.height + fastSettings.paddingY * 2);
+    expect(shell.maskPath).toContain("A18 18");
+    await page.close();
+  });
+
+  test("manual focus and pin use the viewport when pointer state is stale", async () => {
+    const page = await context.newPage();
+    await page.goto(`${server.origin}/article.html`);
+
+    await sendExtensionMessage(context, page, { type: "UMBRA_FOCUS_NOW" });
+    await expect.poll(async () => (await shellInfo(page))?.visible).toBe(true);
+    const focusedShell = await shellInfo(page);
+
+    await sendExtensionMessage(context, page, { type: "UMBRA_PIN_NOW" });
+    await page.mouse.move(10, 10);
+    await page.waitForTimeout(180);
+    const pinnedShell = await shellInfo(page);
+    expect(pinnedShell.visible).toBe(true);
+    expectClose(pinnedShell.left, focusedShell.left);
+    await page.close();
+  });
+
   test("shows a boundary preview before hover dwell", async () => {
     const page = await context.newPage();
     await setExtensionSettings(context, { dwellMs: 900 });
@@ -310,21 +371,17 @@ test.describe("Umbra extension fixtures", () => {
     const shell = await shellInfo(page);
     expect(shell.height).toBeLessThanOrEqual(260);
     expect(shell.boxShadow).toContain("12px");
-    expect(shell.dimmers.some((dimmer) => dimmer.visible)).toBe(true);
-    expect(shell.dimmers.find((dimmer) => dimmer.visible).backgroundColor).toBe(
-      "rgb(18, 52, 86)",
-    );
+    expect(shell.maskVisible).toBe(true);
+    expect(shell.maskFill).toBe("rgb(18, 52, 86)");
     await page.close();
   });
 
-  test("uses dimmer rectangles on transformed roots and hides for native modals", async () => {
+  test("uses the rounded mask on transformed roots and hides for native modals", async () => {
     const page = await context.newPage();
     await page.goto(`${server.origin}/transformed-html.html`);
     await focusByHover(page, "#transformed-target");
     let shell = await shellInfo(page);
-    expect(
-      shell.dimmers.some((dimmer) => dimmer.visible && dimmer.width > 0),
-    ).toBe(true);
+    expect(shell.maskVisible).toBe(true);
 
     await page.evaluate(() => {
       const dialog = document.createElement("dialog");
@@ -335,7 +392,7 @@ test.describe("Umbra extension fixtures", () => {
     await page.mouse.move(100, 100);
     await expect.poll(async () => (await shellInfo(page))?.visible).toBe(false);
     shell = await shellInfo(page);
-    expect(shell.dimmers.every((dimmer) => !dimmer.visible)).toBe(true);
+    expect(shell.maskVisible).toBe(false);
     await page.close();
   });
 

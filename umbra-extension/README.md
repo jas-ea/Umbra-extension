@@ -1,4 +1,4 @@
-# Umbra 2.1
+# Umbra 2.2
 
 Umbra is a local-first focus layer for the live web. It dims surrounding chrome without rewriting pages, and it is designed to fail safe when unsure.
 
@@ -11,6 +11,14 @@ Umbra is built around a small rule engine:
 3. Presence is weak evidence. Fresh activity is strong evidence.
 4. If Umbra is uncertain, it widens, softens, or does nothing.
 5. Exit quality matters as much as entry quality.
+
+## What changed in 2.2
+
+- Simplified the popup to daily-use controls only: enable, page status, Focus, Pin, Pause, and a collapsed site behavior section.
+- Removed visible timing and intensity sliders from the popup; detailed tuning stays in Settings.
+- Restored rounded spotlight cutouts with a single masked dimming layer.
+- Made manual Focus and Pin choose the focused element or viewport reading band before falling back to pointer position.
+- Added popup recovery for already-open pages after install or update, avoiding reload prompts when Chrome allows same-page injection.
 
 ## What changed in 2.1
 
@@ -41,7 +49,7 @@ Umbra is built around a small rule engine:
 
 ## Controls
 
-- Popup: global enable, current-site Auto / Manual / Off, Focus now, Pin block, Pause on this tab.
+- Popup: global enable, current-page status, Focus, Pin, Pause, and collapsed current-site Auto / Manual / Off behavior.
 - Options: behavior, timing, overlay opacity, geometry, outline, debug logs, and per-site mode overrides.
 - Hotkeys: `Alt+Shift+U` pauses the current tab, `Alt+Shift+F` forces focus now.
 - Shift + Click pins the surface under the pointer.

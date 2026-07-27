@@ -1,10 +1,11 @@
 {
   "manifest_version": 3,
   "name": "Umbra",
-  "version": "2.1.0",
+  "version": "2.2.2",
   "description": "A pointer-first focus overlay that softly dims the web while preserving reading, comparison, and creation flows.",
   "homepage_url": "https://github.com/jas-ea/Umbra-extension",
   "permissions": [
+    "scripting",
     "storage"
   ],
   "host_permissions": [

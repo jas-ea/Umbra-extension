@@ -10,7 +10,7 @@
     focusMode: "block",
     paddingX: 24,
     paddingY: 20,
-    cornerRadius: 18,
+    cornerRadius: 12,
     transitionMs: 170,
     stationaryTolerance: 10,
     revealBuffer: 44,

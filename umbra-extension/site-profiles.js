@@ -203,11 +203,12 @@
       intent: 'generic',
       defaultMode: 'auto',
       match: () => true,
-      quickSelectors: ['article', 'main', 'section'],
-      preferSelectors: ['article', 'main', 'section'],
+      quickSelectors: ['article', '[role="article"]', '[data-message-author-role]', '[data-testid*="message" i]', '[data-testid*="card" i]', '[class*="card" i]', '[class*="message" i]', '[class*="post" i]', '[class*="story" i]', '[class*="note" i]', '.prose', '.entry-content', 'section', 'main'],
+      preferSelectors: ['article', '[role="article"]', '[data-message-author-role]', '[data-testid*="message" i]', '[data-testid*="card" i]', '[class*="card" i]', '[class*="message" i]', '[class*="post" i]', '[class*="story" i]', '[class*="note" i]', '.prose', '.entry-content', 'section', 'main'],
+      surfaceSelectors: ['article', '[role="article"]', '[data-message-author-role]', '[data-testid*="message" i]', '[data-testid*="card" i]', '[class*="card" i]', '[class*="message" i]', '[class*="post" i]', '[class*="story" i]', '[class*="note" i]', '.prose', '.entry-content'],
       rejectSelectors: ['aside', 'nav', 'header', 'footer'],
       rejectTokens: ['sidebar', 'menu', 'toolbar', 'banner', 'modal', 'dialog', 'popup', 'overlay', 'search', 'rail'],
-      fallbackSelectors: ['article', 'main', 'section', '[role="article"]', '[role="main"]']
+      fallbackSelectors: ['article', '[role="article"]', '[data-message-author-role]', '[class*="card" i]', 'main', '[role="main"]']
     })
   ];
 
