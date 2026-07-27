@@ -45,11 +45,11 @@ When adding or fixing a site profile:
    - `match`
    - `intent`
    - `quickSelectors`
-	   - `preferSelectors`
-	   - `surfaceSelectors`
-	   - `rejectSelectors`
-	   - `rejectTokens`
-	   - `fallbackSelectors`
+     - `preferSelectors`
+     - `surfaceSelectors`
+     - `rejectSelectors`
+     - `rejectTokens`
+     - `fallbackSelectors`
 5. Test at least two distinct pages on that site.
 6. Add a short changelog entry.
 

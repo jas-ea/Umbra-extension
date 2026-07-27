@@ -22,11 +22,13 @@ npm run validate
 - `comparative-table.html`: table fixture for comparative targeting work.
 - `composer.html`: composer fixture for action-lock and typing checks.
 - `transformed-html.html`: transformed-root fixture for four-rectangle dimming and native modal suppression.
+- `noisy-chat-app.html`: ChatGPT/Codex-style app shell with sidebars, sticky header, composer, toolbars, and adjacent answer blocks.
+- `noisy-social-feed.html`: X/Instagram-style timeline with side rails, composer, sponsored content, a fixed drawer, repeated posts, and action buttons.
 
 ## Recommended Live QA Before Release
 
-1. ChatGPT: hover over answer blocks, then move into the composer and verify the surface expands and tracks growth.
-2. X / Twitter: read a post, open reply, type, then move back to reading and verify the composer does not stay sticky.
+1. ChatGPT or Codex: hover across adjacent answer blocks, then move into the composer and verify focus switches cleanly without selecting the page shell.
+2. X / Twitter or Instagram-style feeds: read adjacent posts near promoted content, side rails, and fixed drawers; verify posts win over surrounding chrome.
 3. Gmail: test inbox rows, opened message bodies, and compose.
 4. Comparative site such as CoinGecko: verify row-level autofocus does not activate by default.
 5. Utility site such as Calendar or Figma: verify Auto stays suppressed or Off by default.

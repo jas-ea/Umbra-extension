@@ -50,7 +50,9 @@
       return output;
     }
 
-    for (const [rawHost, rawMode] of Object.entries(value).slice(-MAX_SITE_OVERRIDES)) {
+    for (const [rawHost, rawMode] of Object.entries(value).slice(
+      -MAX_SITE_OVERRIDES,
+    )) {
       const host = normalizeHost(rawHost);
       const mode = normalizeSiteMode(rawMode);
       if (host && mode && mode !== "auto") output[host] = mode;
@@ -103,7 +105,8 @@
 
   function badgeForState(state) {
     if (!state) return { text: "", color: "#5b8def" };
-    if (state.autoBlockedReason === "disabled") return { text: "OFF", color: "#9aa0a6" };
+    if (state.autoBlockedReason === "disabled")
+      return { text: "OFF", color: "#9aa0a6" };
     if (state.pausedForTab) return { text: "II", color: "#f5a623" };
     if (state.siteMode === "off") return { text: "OFF", color: "#9aa0a6" };
     if (state.siteMode === "manual") return { text: "M", color: "#5b8def" };

@@ -46,6 +46,21 @@ Site-specific adjustments live in `umbra-extension/site-profiles.js`, while the 
 
 3. Umbra should appear in the extensions list and the toolbar.
 
+## Publishing package
+
+Build a clean Chrome Web Store package from the repository root:
+
+```bash
+npm ci
+npm run lint
+npm test
+npm run test:e2e
+npm run validate
+npm run package:extension
+```
+
+The packaging command writes `dist/umbra-<version>.zip` from runtime extension files only. `dist/` is intentionally ignored so generated archives do not drift in Git.
+
 ---
 
 ## Using Umbra

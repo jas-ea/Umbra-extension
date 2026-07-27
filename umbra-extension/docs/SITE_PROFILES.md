@@ -61,7 +61,6 @@ Good profile candidates:
 - Hacker News comment pages
 - long-form blogging platforms
 
-
 ## Default modes
 
 Every profile should now declare a `defaultMode`:
@@ -71,7 +70,6 @@ Every profile should now declare a `defaultMode`:
 - `off`: Umbra disabled for that site by default
 
 This is the preferred way to handle calendars, editors, dashboards, canvases, and other utility-heavy surfaces.
-
 
 ## Comparative pages
 

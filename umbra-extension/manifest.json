@@ -4,13 +4,8 @@
   "version": "2.2.2",
   "description": "A pointer-first focus overlay that softly dims the web while preserving reading, comparison, and creation flows.",
   "homepage_url": "https://github.com/jas-ea/Umbra-extension",
-  "permissions": [
-    "scripting",
-    "storage"
-  ],
-  "host_permissions": [
-    "<all_urls>"
-  ],
+  "permissions": ["scripting", "storage"],
+  "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "background.js",
     "type": "module"
@@ -48,14 +43,8 @@
   },
   "content_scripts": [
     {
-      "matches": [
-        "<all_urls>"
-      ],
-      "js": [
-        "defaults.js",
-        "site-profiles.js",
-        "content.js"
-      ],
+      "matches": ["<all_urls>"],
+      "js": ["defaults.js", "site-profiles.js", "content.js"],
       "run_at": "document_idle"
     }
   ]

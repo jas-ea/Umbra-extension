@@ -11,7 +11,13 @@ body {
   width: 320px;
   background: #101114;
   color: #f4f4f1;
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    sans-serif;
 }
 
 .popup {
@@ -30,8 +36,12 @@ body {
   height: 36px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 50%;
-  background:
-    radial-gradient(circle at 50% 50%, #f4f4f1 0 21%, #8fa1ff 22% 34%, #181a20 35% 100%);
+  background: radial-gradient(
+    circle at 50% 50%,
+    #f4f4f1 0 21%,
+    #8fa1ff 22% 34%,
+    #181a20 35% 100%
+  );
   box-shadow: inset 0 0 0 5px rgba(255, 255, 255, 0.04);
 }
 

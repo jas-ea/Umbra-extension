@@ -24,11 +24,9 @@ The overlay is visual only: the host is `aria-hidden`, does not trap focus, and 
 
 Some products are not well represented by generic heuristics. Mail clients, timelines, editors, and docs tools often need narrow handling. Site profiles let Umbra improve incrementally without destabilizing the global engine.
 
-
 ## Site modes
 
 Each site profile can declare a `defaultMode` of `auto`, `manual`, or `off`. This lets the repo encode first-principles defaults for different product surfaces. Reading surfaces should usually be `auto`. Hybrid workspaces should often be `manual`. Pure utility apps such as calendars or canvases should usually be `off`.
-
 
 ## Targeting posture
 

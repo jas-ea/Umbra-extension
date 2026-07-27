@@ -56,7 +56,9 @@ function parseSiteOverrides(value) {
   for (const rawLine of String(value || "").split("\n")) {
     const line = rawLine.trim();
     if (!line || line.startsWith("#")) continue;
-    const [rawHost, rawMode = "off"] = line.split("=").map((part) => part.trim());
+    const [rawHost, rawMode = "off"] = line
+      .split("=")
+      .map((part) => part.trim());
     const host = globalThis.UMBRA_NORMALIZE_HOST(rawHost);
     if (host && ["manual", "off"].includes(rawMode)) overrides[host] = rawMode;
   }
@@ -87,7 +89,8 @@ function readForm() {
     const el = $(key);
     if (!el) continue;
     if (el.type === "checkbox") out[key] = el.checked;
-    else if (el.type === "number" || el.type === "range") out[key] = Number(el.value);
+    else if (el.type === "number" || el.type === "range")
+      out[key] = Number(el.value);
     else out[key] = el.value;
   }
   out.siteOverrides = parseSiteOverrides($("siteOverrides").value);

@@ -1,4 +1,4 @@
-# Umbra 2.2
+# Umbra 2.2.2
 
 Umbra is a local-first focus layer for the live web. It dims surrounding chrome without rewriting pages, and it is designed to fail safe when unsure.
 
@@ -19,6 +19,7 @@ Umbra is built around a small rule engine:
 - Restored rounded spotlight cutouts with a single masked dimming layer.
 - Made manual Focus and Pin choose the focused element or viewport reading band before falling back to pointer position.
 - Added popup recovery for already-open pages after install or update, avoiding reload prompts when Chrome allows same-page injection.
+- Added noisy-page regression coverage for ChatGPT-like app shells and X-like social feeds so targeting is checked against realistic surfaces, not only simple blocks.
 
 ## What changed in 2.1
 
@@ -100,9 +101,14 @@ npm run lint
 npm test
 npm run test:e2e
 npm run validate
+npm run package:extension
 ```
 
-The Playwright suite serves local fixtures and loads the unpacked extension in Chromium.
+The Playwright suite serves local fixtures and loads the unpacked extension in Chromium. The browser fixtures include noisy app and social-feed pages with sticky headers, side rails, composers, ads, drawers, repeated posts, and nearby competing message blocks.
+
+## Publishing
+
+`npm run package:extension` validates the MV3 manifest, copies runtime files into `dist/umbra-<version>/`, and writes `dist/umbra-<version>.zip` for Chrome Web Store upload. Generated packages are ignored by Git.
 
 ## v2.0.2 notes
 

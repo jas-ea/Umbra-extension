@@ -1,0 +1,92 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Umbra fixture - noisy chat app</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 15px/1.45 system-ui, sans-serif; background: #0f1115; color: #f4f5f7; }
+    .app { display: grid; grid-template-columns: 252px 1fr 292px; height: 100vh; overflow: hidden; }
+    nav, aside { overflow: auto; padding: 16px; background: #151922; border-right: 1px solid #272d38; }
+    aside { border-right: 0; border-left: 1px solid #272d38; }
+    .rail-card, .thread, .ad, .toolbox { margin-bottom: 12px; padding: 12px; border: 1px solid #2c3340; border-radius: 10px; background: #1b202a; }
+    button, input, textarea { font: inherit; }
+    button { margin: 3px; padding: 6px 9px; border: 1px solid #3a4250; border-radius: 7px; background: #242b36; color: #f4f5f7; }
+    .workspace { display: grid; grid-template-rows: auto 1fr auto; min-width: 0; background: #101319; }
+    header { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; justify-content: space-between; padding: 12px 22px; border-bottom: 1px solid #272d38; background: rgba(16,19,25,0.96); }
+    .chat-scroll { overflow: auto; padding: 28px 46px 24px; }
+    .message { width: min(780px, 100%); margin: 0 auto 18px; padding: 18px 20px; border: 1px solid #303746; border-radius: 12px; background: #f7f2e9; color: #181a1f; }
+    .message.user { margin-left: auto; width: min(620px, 84%); background: #dfe8ff; }
+    .message h2 { margin: 0 0 10px; font-size: 18px; }
+    .message p { margin: 0 0 10px; }
+    .message pre { overflow: auto; padding: 12px; border-radius: 8px; background: #111827; color: #dce5f8; }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 12px; }
+    .composer { position: sticky; bottom: 0; z-index: 3; padding: 14px 46px 20px; background: linear-gradient(180deg, rgba(16,19,25,0), #101319 28%); }
+    .composer-shell { width: min(780px, 100%); margin: 0 auto; padding: 12px; border: 1px solid #3b4352; border-radius: 14px; background: #1a202b; }
+    textarea { display: block; width: 100%; min-height: 78px; resize: vertical; padding: 10px; border: 1px solid #3b4352; border-radius: 10px; background: #101319; color: #f4f5f7; }
+    .floating { position: fixed; right: 318px; bottom: 128px; padding: 10px; border: 1px solid #465064; border-radius: 999px; background: #222a36; box-shadow: 0 12px 36px rgba(0,0,0,0.28); }
+  </style>
+</head>
+<body>
+  <script>window.__UMBRA_TEST_HOOKS__ = true;</script>
+  <div class="app">
+    <nav aria-label="Workspace navigation">
+      <button>New task</button>
+      <button>Search</button>
+      <div class="thread"><strong>Extension polish</strong><p>Popup and focus targeting notes.</p></div>
+      <div class="thread"><strong>Website audit</strong><p>Old noisy task with many messages.</p></div>
+      <div class="thread"><strong>Release checklist</strong><p>Build, verify, package.</p></div>
+      <div class="rail-card"><button>Settings</button><button>Archive</button></div>
+    </nav>
+    <main class="workspace">
+      <header>
+        <strong>Umbra product review</strong>
+        <div>
+          <button>Share</button>
+          <button>History</button>
+          <button>More</button>
+        </div>
+      </header>
+      <section class="chat-scroll" id="chatScroll">
+        <article class="message user" data-message-author-role="user" id="user-message">
+          <p>Can you make this less jumpy on dense app pages?</p>
+        </article>
+        <article class="message" data-message-author-role="assistant" id="assistant-message-one">
+          <h2>Focus behavior audit</h2>
+          <p>This assistant response is the intended reading unit. It sits between a sticky header, side navigation, toolbars, and a composer.</p>
+          <p>Umbra should focus this message, not the full workspace, sidebar, right inspector, floating button, or composer.</p>
+          <pre>const target = pickReadableSurface(pointer, candidates);</pre>
+          <div class="toolbar">
+            <button>Copy</button>
+            <button>Retry</button>
+            <button>Open diff</button>
+            <button>Thumbs up</button>
+          </div>
+        </article>
+        <article class="message" data-message-author-role="assistant" id="assistant-message-two">
+          <h2>Implementation details</h2>
+          <p>Another message below the target provides a nearby competing surface for switching behavior.</p>
+          <p>It should become the target only when the pointer settles over it.</p>
+          <div class="toolbar">
+            <button>Copy</button>
+            <button>Retry</button>
+          </div>
+        </article>
+      </section>
+      <section class="composer">
+        <form class="composer-shell" id="composer-shell">
+          <textarea id="composer-text">Draft reply in a sticky composer.</textarea>
+          <button type="button">Attach</button>
+          <button type="button">Send</button>
+        </form>
+      </section>
+    </main>
+    <aside aria-label="Inspector">
+      <div class="toolbox"><strong>Files</strong><p>content.js, popup.js, tests</p><button>Open</button></div>
+      <div class="ad"><strong>Suggested action</strong><p>Review release notes and packaged extension.</p><button>Dismiss</button></div>
+      <div class="toolbox"><strong>Run history</strong><p>13 browser checks, 18 unit checks.</p><button>Details</button></div>
+    </aside>
+  </div>
+  <button class="floating">Ask</button>
+</body>
+</html>

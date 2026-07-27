@@ -1,0 +1,80 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Umbra fixture - noisy social feed</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 15px/1.42 system-ui, sans-serif; background: #f4f6f8; color: #111827; }
+    .shell { display: grid; grid-template-columns: 250px minmax(520px, 680px) 320px; gap: 20px; width: 1270px; max-width: 100vw; height: 100vh; margin: 0 auto; }
+    nav, aside { position: sticky; top: 0; height: 100vh; padding: 18px 14px; overflow: auto; }
+    nav { border-right: 1px solid #d8dee6; }
+    aside { border-left: 1px solid #d8dee6; }
+    button, input { font: inherit; }
+    button { margin: 4px; padding: 7px 10px; border: 1px solid #c8d0dc; border-radius: 999px; background: white; }
+    .nav-item, .trend, .promo { margin-bottom: 12px; padding: 12px; border: 1px solid #d8dee6; border-radius: 14px; background: white; }
+    main { min-width: 0; border-left: 1px solid #d8dee6; border-right: 1px solid #d8dee6; background: white; }
+    .feed-header { position: sticky; top: 0; z-index: 2; display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; border-bottom: 1px solid #d8dee6; background: rgba(255,255,255,0.94); }
+    .composer { padding: 14px 18px; border-bottom: 1px solid #d8dee6; background: #fbfcfd; }
+    .composer input { width: 100%; padding: 11px; border: 1px solid #ccd4df; border-radius: 999px; }
+    article[role="article"] { padding: 16px 18px; border-bottom: 1px solid #d8dee6; background: white; }
+    article[role="article"]:hover { background: #fcfdff; }
+    .author { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-weight: 700; }
+    .avatar { width: 38px; height: 38px; border-radius: 50%; background: linear-gradient(135deg, #111827, #5870ff); }
+    .media-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+    .media { height: 122px; border-radius: 12px; background: linear-gradient(135deg, #dce4ef, #8798b2); }
+    .actions { display: flex; justify-content: space-between; margin-top: 12px; color: #566170; }
+    .ad-card { margin: 14px 18px; padding: 16px; border: 1px solid #d8dee6; border-radius: 14px; background: #fff7ed; }
+    .dm-drawer { position: fixed; right: 26px; bottom: 0; width: 310px; padding: 14px; border: 1px solid #c8d0dc; border-bottom: 0; border-radius: 16px 16px 0 0; background: white; box-shadow: 0 -10px 28px rgba(0,0,0,0.12); }
+  </style>
+</head>
+<body>
+  <script>window.__UMBRA_TEST_HOOKS__ = true;</script>
+  <div class="shell">
+    <nav aria-label="Primary">
+      <div class="nav-item"><strong>Home</strong><p>Mixed navigation should not win.</p></div>
+      <div class="nav-item"><strong>Explore</strong><button>Trending</button><button>Live</button></div>
+      <div class="nav-item"><strong>Messages</strong><p>Unread utility chrome.</p></div>
+      <button>Post</button>
+    </nav>
+    <main aria-label="Timeline">
+      <header class="feed-header">
+        <strong>Noisy timeline</strong>
+        <div><button>For you</button><button>Following</button></div>
+      </header>
+      <section class="composer" aria-label="Post composer">
+        <input aria-label="Post text" value="What is happening?">
+        <button>Photo</button>
+        <button>Publish</button>
+      </section>
+      <article role="article" data-testid="tweet" id="tweet-one">
+        <div class="author"><span class="avatar"></span><span>Product Builder</span><span>@builder</span></div>
+        <p>This is a dense feed item with text, media, and action buttons. It should be the focus target when the pointer settles here.</p>
+        <div class="media-grid"><div class="media"></div><div class="media"></div></div>
+        <div class="actions"><button>Reply</button><button>Repost</button><button>Like</button><button>Share</button></div>
+      </article>
+      <div class="ad-card"><strong>Sponsored</strong><p>Promotional card between posts should not steal focus from the nearby post.</p><button>Learn more</button></div>
+      <article role="article" data-testid="tweet" id="tweet-two">
+        <div class="author"><span class="avatar"></span><span>Research Lab</span><span>@lab</span></div>
+        <p>Second timeline post. Moving from the first post to this one should switch the focus frame cleanly.</p>
+        <p>The surrounding app chrome, right rail, and drawer are deliberately noisy.</p>
+        <div class="actions"><button>Reply</button><button>Repost</button><button>Like</button><button>Share</button></div>
+      </article>
+      <article role="article" data-testid="tweet" id="tweet-three">
+        <div class="author"><span class="avatar"></span><span>Designer</span><span>@design</span></div>
+        <p>Third post creates more repeated content below the viewport.</p>
+      </article>
+    </main>
+    <aside aria-label="What is happening">
+      <div class="promo"><strong>Subscribe</strong><p>Utility promo panel with actions.</p><button>Subscribe</button></div>
+      <div class="trend"><strong>Trending</strong><p>#AI #Design #Release</p></div>
+      <div class="trend"><strong>Who to follow</strong><button>Follow</button><button>Follow</button></div>
+    </aside>
+  </div>
+  <section class="dm-drawer" data-testid="DMDrawer">
+    <strong>Messages</strong>
+    <p>Fixed utility drawer should be rejected.</p>
+    <button>Open</button>
+  </section>
+</body>
+</html>

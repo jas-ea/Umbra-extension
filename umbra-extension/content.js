@@ -1,6 +1,5 @@
-
 (() => {
-  const RUNTIME_VERSION = '2.2.2';
+  const RUNTIME_VERSION = "2.2.2";
   const previousRuntime = globalThis.UMBRA_RUNTIME;
   if (previousRuntime?.version === RUNTIME_VERSION) return;
   if (previousRuntime?.teardown) {
@@ -8,7 +7,7 @@
       previousRuntime.teardown();
     } catch (_) {}
   } else {
-    document.getElementById('umbra-overlay-host')?.remove();
+    document.getElementById("umbra-overlay-host")?.remove();
   }
   globalThis.__umbraInjected = true;
 
@@ -16,22 +15,35 @@
   const normalizeSettings = globalThis.UMBRA_NORMALIZE_SETTINGS;
 
   const INTERACTIVE_SELECTOR = [
-    'button', 'input', 'textarea', 'select', 'summary', 'details',
-    'a[href]', '[role="button"]', '[role="tab"]', '[role="link"]',
-    '[role="menuitem"]', '[role="checkbox"]', '[role="switch"]',
-    '[contenteditable="true"]', '[contenteditable="plaintext-only"]'
-  ].join(',');
+    "button",
+    "input",
+    "textarea",
+    "select",
+    "summary",
+    "details",
+    "a[href]",
+    '[role="button"]',
+    '[role="tab"]',
+    '[role="link"]',
+    '[role="menuitem"]',
+    '[role="checkbox"]',
+    '[role="switch"]',
+    '[contenteditable="true"]',
+    '[contenteditable="plaintext-only"]',
+  ].join(",");
 
   const EDITABLE_SELECTOR = [
-    'textarea', 'input:not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"])',
-    '[contenteditable="true"]', '[contenteditable="plaintext-only"]',
-    '[role="textbox"]'
-  ].join(',');
+    "textarea",
+    'input:not([type="checkbox"]):not([type="radio"]):not([type="button"]):not([type="submit"])',
+    '[contenteditable="true"]',
+    '[contenteditable="plaintext-only"]',
+    '[role="textbox"]',
+  ].join(",");
 
   const READ_SURFACE_SELECTOR = [
-    'article',
+    "article",
     '[role="article"]',
-    '[data-message-author-role]',
+    "[data-message-author-role]",
     '[data-testid*="message" i]',
     '[data-testid*="card" i]',
     '[class*="card" i]',
@@ -39,9 +51,9 @@
     '[class*="post" i]',
     '[class*="story" i]',
     '[class*="note" i]',
-    '.prose',
-    '.entry-content'
-  ].join(',');
+    ".prose",
+    ".entry-content",
+  ].join(",");
 
   const state = {
     settings: { ...settingsDefaults },
@@ -83,45 +95,94 @@
     lastHref: location.href,
     navigationHandler: null,
     runtimeMessageHandler: null,
-    storageChangedHandler: null
+    storageChangedHandler: null,
   };
 
   const storage = chrome.storage.sync;
 
   function log(...args) {
-    if (state.settings.debug) console.log('[Umbra2]', ...args);
+    if (state.settings.debug) console.log("[Umbra2]", ...args);
   }
 
-  function nowTs() { return Date.now(); }
-  function clamp(v, min, max) { return Math.min(max, Math.max(min, v)); }
-  function distance(ax, ay, bx, by) { return Math.hypot(ax - bx, ay - by); }
-  function normalizeHost(value) { return globalThis.UMBRA_NORMALIZE_HOST(value); }
-  function selectorList(list) { return Array.isArray(list) ? list.filter(Boolean) : []; }
+  function nowTs() {
+    return Date.now();
+  }
+  function clamp(v, min, max) {
+    return Math.min(max, Math.max(min, v));
+  }
+  function distance(ax, ay, bx, by) {
+    return Math.hypot(ax - bx, ay - by);
+  }
+  function normalizeHost(value) {
+    return globalThis.UMBRA_NORMALIZE_HOST(value);
+  }
+  function selectorList(list) {
+    return Array.isArray(list) ? list.filter(Boolean) : [];
+  }
 
   function getProfiles() {
-    return Array.isArray(globalThis.UMBRA_SITE_PROFILES) ? globalThis.UMBRA_SITE_PROFILES : [];
+    return Array.isArray(globalThis.UMBRA_SITE_PROFILES)
+      ? globalThis.UMBRA_SITE_PROFILES
+      : [];
   }
 
   function resolveSiteProfile() {
-    const ctx = { host: normalizeHost(location.hostname), pathname: location.pathname, href: location.href, doc: document };
+    const ctx = {
+      host: normalizeHost(location.hostname),
+      pathname: location.pathname,
+      href: location.href,
+      doc: document,
+    };
     for (const profile of getProfiles()) {
       try {
-        if (typeof profile.match === 'function' && profile.match(ctx)) return profile;
+        if (typeof profile.match === "function" && profile.match(ctx))
+          return profile;
       } catch (err) {
-        log('profile match error', err);
+        log("profile match error", err);
       }
     }
     return {
-      id: 'generic',
-      label: 'Generic',
-      intent: 'generic',
-      defaultMode: 'auto',
-      quickSelectors: ['article', 'main', 'section'],
-      preferSelectors: ['article', 'main', 'section'],
-      surfaceSelectors: ['article', '[role="article"]', '[data-message-author-role]', '[data-testid*="message" i]', '[data-testid*="card" i]', '[class*="card" i]', '[class*="message" i]', '[class*="post" i]', '[class*="story" i]', '[class*="note" i]', '.prose', '.entry-content'],
-      rejectSelectors: ['aside', 'nav', 'header', 'footer'],
-      rejectTokens: ['sidebar', 'menu', 'toolbar', 'banner', 'modal', 'dialog', 'popup', 'overlay', 'search', 'rail'],
-      fallbackSelectors: ['article', '[role="article"]', '[data-message-author-role]', '[class*="card" i]', 'main', '[role="main"]']
+      id: "generic",
+      label: "Generic",
+      intent: "generic",
+      defaultMode: "auto",
+      quickSelectors: ["article", "main", "section"],
+      preferSelectors: ["article", "main", "section"],
+      surfaceSelectors: [
+        "article",
+        '[role="article"]',
+        "[data-message-author-role]",
+        '[data-testid*="message" i]',
+        '[data-testid*="card" i]',
+        '[class*="card" i]',
+        '[class*="message" i]',
+        '[class*="post" i]',
+        '[class*="story" i]',
+        '[class*="note" i]',
+        ".prose",
+        ".entry-content",
+      ],
+      rejectSelectors: ["aside", "nav", "header", "footer"],
+      rejectTokens: [
+        "sidebar",
+        "menu",
+        "toolbar",
+        "banner",
+        "modal",
+        "dialog",
+        "popup",
+        "overlay",
+        "search",
+        "rail",
+      ],
+      fallbackSelectors: [
+        "article",
+        '[role="article"]',
+        "[data-message-author-role]",
+        '[class*="card" i]',
+        "main",
+        '[role="main"]',
+      ],
     };
   }
 
@@ -129,28 +190,40 @@
     const host = normalizeHost(location.hostname);
     const overrides = state.settings.siteOverrides || {};
     if (overrides[host]) return overrides[host];
-    const parts = host.split('.');
+    const parts = host.split(".");
     for (let i = 1; i < parts.length - 1; i += 1) {
-      const suffix = parts.slice(i).join('.');
+      const suffix = parts.slice(i).join(".");
       if (overrides[suffix]) return overrides[suffix];
     }
-    return state.siteProfile?.defaultMode || 'auto';
+    return state.siteProfile?.defaultMode || "auto";
   }
 
   function visibleCount(selector) {
     return [...document.querySelectorAll(selector)].filter((el) => {
       const r = el.getBoundingClientRect();
-      return r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < window.innerHeight;
+      return (
+        r.width > 0 &&
+        r.height > 0 &&
+        r.bottom > 0 &&
+        r.top < window.innerHeight
+      );
     }).length;
   }
 
   function isUtilityLikePage() {
-    const intent = state.siteProfile?.intent || 'generic';
-    if (['article', 'timeline', 'chat', 'gmail', 'comparative'].includes(intent)) return false;
-    if (intent === 'utility') return true;
-    const buttons = visibleCount('button, [role="button"], input, textarea, select, [contenteditable="true"]');
-    const menus = visibleCount('nav, [role="navigation"], [role="tablist"], [role="toolbar"], [role="menu"], [role="grid"], [role="tree"]');
-    const paragraphs = visibleCount('p, article, main, blockquote');
+    const intent = state.siteProfile?.intent || "generic";
+    if (
+      ["article", "timeline", "chat", "gmail", "comparative"].includes(intent)
+    )
+      return false;
+    if (intent === "utility") return true;
+    const buttons = visibleCount(
+      'button, [role="button"], input, textarea, select, [contenteditable="true"]',
+    );
+    const menus = visibleCount(
+      'nav, [role="navigation"], [role="tablist"], [role="toolbar"], [role="menu"], [role="grid"], [role="tree"]',
+    );
+    const paragraphs = visibleCount("p, article, main, blockquote");
     if (menus >= 3 && buttons >= 10 && paragraphs <= 4) return true;
     if (buttons >= 16 && paragraphs <= 2) return true;
     return false;
@@ -158,30 +231,35 @@
 
   function topLayerModalOpen() {
     try {
-      if (document.querySelector(':modal')) return true;
+      if (document.querySelector(":modal")) return true;
     } catch (_) {
-      if (document.querySelector('dialog[open]')) return true;
+      if (document.querySelector("dialog[open]")) return true;
     }
     try {
-      return !!document.querySelector(':popover-open');
+      return !!document.querySelector(":popover-open");
     } catch (_) {
       return false;
     }
   }
 
   function autoBlockedReason() {
-    if (!state.settings.enabled) return 'disabled';
-    if (state.pausedForTab) return 'paused';
-    if (topLayerModalOpen()) return 'modal-open';
+    if (!state.settings.enabled) return "disabled";
+    if (state.pausedForTab) return "paused";
+    if (topLayerModalOpen()) return "modal-open";
     const mode = currentSiteMode();
-    if (mode === 'off') return 'site-off';
-    if (mode === 'manual') return 'site-manual';
-    if (state.settings.appAutoSuppress && isUtilityLikePage()) return 'utility-page';
+    if (mode === "off") return "site-off";
+    if (mode === "manual") return "site-manual";
+    if (state.settings.appAutoSuppress && isUtilityLikePage())
+      return "utility-page";
     return null;
   }
 
   function canManualRun() {
-    return state.settings.enabled && !state.pausedForTab && currentSiteMode() !== 'off';
+    return (
+      state.settings.enabled &&
+      !state.pausedForTab &&
+      currentSiteMode() !== "off"
+    );
   }
 
   function canAutoRun() {
@@ -190,15 +268,15 @@
 
   function ensureOverlay() {
     if (state.overlayHost) return;
-    const host = document.createElement('div');
-    host.id = 'umbra-overlay-host';
-    host.setAttribute('aria-hidden', 'true');
-    host.style.position = 'fixed';
-    host.style.inset = '0';
-    host.style.pointerEvents = 'none';
-    host.style.zIndex = '2147483646';
-    const shadow = host.attachShadow({ mode: 'open' });
-    const style = document.createElement('style');
+    const host = document.createElement("div");
+    host.id = "umbra-overlay-host";
+    host.setAttribute("aria-hidden", "true");
+    host.style.position = "fixed";
+    host.style.inset = "0";
+    host.style.pointerEvents = "none";
+    host.style.zIndex = "2147483646";
+    const shadow = host.attachShadow({ mode: "open" });
+    const style = document.createElement("style");
     style.textContent = `
       :host { all: initial; }
       .mask {
@@ -267,15 +345,18 @@
         }
       }
     `;
-    const mask = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    mask.classList.add('mask');
-    mask.setAttribute('aria-hidden', 'true');
-    mask.setAttribute('focusable', 'false');
-    const maskPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    maskPath.setAttribute('fill-rule', 'evenodd');
+    const mask = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    mask.classList.add("mask");
+    mask.setAttribute("aria-hidden", "true");
+    mask.setAttribute("focusable", "false");
+    const maskPath = document.createElementNS(
+      "http://www.w3.org/2000/svg",
+      "path",
+    );
+    maskPath.setAttribute("fill-rule", "evenodd");
     mask.append(maskPath);
-    const shell = document.createElement('div');
-    shell.className = 'shell';
+    const shell = document.createElement("div");
+    shell.className = "shell";
     shadow.append(style, mask, shell);
     document.documentElement.appendChild(host);
     state.overlayHost = host;
@@ -288,18 +369,32 @@
 
   function applyVisualSettings() {
     if (!state.overlayHost) return;
-    const rgb = hexToRgb(state.settings.dimTint || '#000000');
+    const rgb = hexToRgb(state.settings.dimTint || "#000000");
     const opacity = state.settings.solidDim ? 1 : state.settings.overlayOpacity;
-    state.overlayHost.style.setProperty('--umbra-opacity', String(opacity));
-    state.overlayHost.style.setProperty('--umbra-dim-rgb', rgb.join(','));
-    state.overlayHost.style.setProperty('--umbra-radius', `${state.settings.cornerRadius}px`);
-    state.overlayHost.style.setProperty('--umbra-transition', `${state.settings.transitionMs}ms`);
-    state.overlayHost.style.setProperty('--umbra-outline', state.settings.showOutline ? 'rgba(255,255,255,0.10)' : 'transparent');
-    state.overlayHost.style.setProperty('--umbra-edge-feather', `${state.settings.edgeFeather || 0}px`);
+    state.overlayHost.style.setProperty("--umbra-opacity", String(opacity));
+    state.overlayHost.style.setProperty("--umbra-dim-rgb", rgb.join(","));
+    state.overlayHost.style.setProperty(
+      "--umbra-radius",
+      `${state.settings.cornerRadius}px`,
+    );
+    state.overlayHost.style.setProperty(
+      "--umbra-transition",
+      `${state.settings.transitionMs}ms`,
+    );
+    state.overlayHost.style.setProperty(
+      "--umbra-outline",
+      state.settings.showOutline ? "rgba(255,255,255,0.10)" : "transparent",
+    );
+    state.overlayHost.style.setProperty(
+      "--umbra-edge-feather",
+      `${state.settings.edgeFeather || 0}px`,
+    );
   }
 
   function hexToRgb(value) {
-    const match = String(value || '').trim().match(/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i);
+    const match = String(value || "")
+      .trim()
+      .match(/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i);
     if (!match) return [0, 0, 0];
     return match.slice(1).map((part) => parseInt(part, 16));
   }
@@ -319,7 +414,7 @@
     const radius = Math.min(
       Math.max(0, Number(state.settings.cornerRadius) || 0),
       width / 2,
-      height / 2
+      height / 2,
     );
     if (!radius) {
       return `${outer}M${left} ${top}H${right}V${bottom}H${left}Z`;
@@ -335,26 +430,27 @@
       `A${radius} ${radius} 0 0 1 ${right - radius} ${bottom}`,
       `H${left + radius}`,
       `A${radius} ${radius} 0 0 1 ${left} ${bottom - radius}`,
-      'Z'
-    ].join('');
+      "Z",
+    ].join("");
   }
 
   function setMask(rect, visible) {
     if (!state.mask || !state.maskPath) return;
     const width = Math.max(0, Math.round(window.innerWidth));
     const height = Math.max(0, Math.round(window.innerHeight));
-    state.mask.setAttribute('viewBox', `0 0 ${width} ${height}`);
-    state.maskPath.setAttribute('d', roundedCutoutPath(rect));
-    state.mask.classList.toggle('visible', !!visible);
+    state.mask.setAttribute("viewBox", `0 0 ${width} ${height}`);
+    state.maskPath.setAttribute("d", roundedCutoutPath(rect));
+    state.mask.classList.toggle("visible", !!visible);
   }
 
   function hideMask() {
     if (!state.mask) return;
-    state.mask.classList.remove('visible');
+    state.mask.classList.remove("visible");
   }
 
   function clearPreview() {
-    if (state.shell && !state.visible) state.shell.classList.remove('preview', 'visible');
+    if (state.shell && !state.visible)
+      state.shell.classList.remove("preview", "visible");
   }
 
   function clearHideTimer() {
@@ -368,7 +464,7 @@
     clearHideTimer();
     if (!state.shell) return;
     if (immediate) {
-      state.shell.classList.remove('visible', 'preview');
+      state.shell.classList.remove("visible", "preview");
       hideMask();
       state.visible = false;
       state.activeRect = null;
@@ -376,7 +472,7 @@
       return;
     }
     state.hideTimer = setTimeout(() => {
-      state.shell.classList.remove('visible', 'preview');
+      state.shell.classList.remove("visible", "preview");
       hideMask();
       state.visible = false;
       state.activeRect = null;
@@ -395,13 +491,13 @@
       return;
     }
     state.activeRect = rect;
-    state.shell.classList.remove('preview');
+    state.shell.classList.remove("preview");
     setMask(rect, true);
     state.shell.style.left = `${Math.round(rect.left)}px`;
     state.shell.style.top = `${Math.round(rect.top)}px`;
     state.shell.style.width = `${Math.max(0, Math.round(rect.width))}px`;
     state.shell.style.height = `${Math.max(0, Math.round(rect.height))}px`;
-    state.shell.classList.add('visible');
+    state.shell.classList.add("visible");
     state.visible = true;
   }
 
@@ -409,7 +505,7 @@
     ensureOverlay();
     if (!rect || state.visible || state.pinned) return;
     hideMask();
-    state.shell.classList.add('preview', 'visible');
+    state.shell.classList.add("preview", "visible");
     state.shell.style.left = `${Math.round(rect.left)}px`;
     state.shell.style.top = `${Math.round(rect.top)}px`;
     state.shell.style.width = `${Math.max(0, Math.round(rect.width))}px`;
@@ -420,7 +516,13 @@
     if (!el || !document.contains(el)) return null;
     const r = el.getBoundingClientRect();
     if (!r.width || !r.height) return null;
-    if (r.right <= 0 || r.left >= window.innerWidth || r.bottom <= 0 || r.top >= window.innerHeight) return null;
+    if (
+      r.right <= 0 ||
+      r.left >= window.innerWidth ||
+      r.bottom <= 0 ||
+      r.top >= window.innerHeight
+    )
+      return null;
     const left = r.left - state.settings.paddingX;
     const top = r.top - state.settings.paddingY;
     const right = r.right + state.settings.paddingX;
@@ -428,18 +530,37 @@
     const width = right - left;
     const height = bottom - top;
     if (r.width < 40 || r.height < 28) return null;
-    if (state.settings.focusMode === 'band') {
-      const bandHeight = Math.min(height, Math.max(96, window.innerHeight * 0.28));
+    if (state.settings.focusMode === "band") {
+      const bandHeight = Math.min(
+        height,
+        Math.max(96, window.innerHeight * 0.28),
+      );
       const bandCenter = readingBandPoint().y;
-      const bandTop = clamp(bandCenter - bandHeight / 2, top, bottom - bandHeight);
-      return { left, top: bandTop, width, height: bandHeight, right, bottom: bandTop + bandHeight };
+      const bandTop = clamp(
+        bandCenter - bandHeight / 2,
+        top,
+        bottom - bandHeight,
+      );
+      return {
+        left,
+        top: bandTop,
+        width,
+        height: bandHeight,
+        right,
+        bottom: bandTop + bandHeight,
+      };
     }
     return { left, top, width, height, right, bottom };
   }
 
   function pointInsideRect(x, y, rect, buffer = 0) {
     if (!rect) return false;
-    return x >= rect.left - buffer && x <= rect.right + buffer && y >= rect.top - buffer && y <= rect.bottom + buffer;
+    return (
+      x >= rect.left - buffer &&
+      x <= rect.right + buffer &&
+      y >= rect.top - buffer &&
+      y <= rect.bottom + buffer
+    );
   }
 
   function closestAny(node, selectors) {
@@ -456,12 +577,16 @@
   function matchesAny(node, selectors) {
     if (!node || !node.matches) return false;
     return selectorList(selectors).some((selector) => {
-      try { return node.matches(selector); } catch (_) { return false; }
+      try {
+        return node.matches(selector);
+      } catch (_) {
+        return false;
+      }
     });
   }
 
   function classTokenString(node) {
-    return `${node?.className || ''} ${node?.id || ''}`.toLowerCase();
+    return `${node?.className || ""} ${node?.id || ""}`.toLowerCase();
   }
 
   function containsRejectToken(node) {
@@ -475,17 +600,28 @@
     if (!el || !document.contains(el)) return false;
     const r = rect || el.getBoundingClientRect();
     if (!r.width || !r.height) return false;
-    if (r.bottom <= 0 || r.top >= window.innerHeight || r.right <= 0 || r.left >= window.innerWidth) return false;
+    if (
+      r.bottom <= 0 ||
+      r.top >= window.innerHeight ||
+      r.right <= 0 ||
+      r.left >= window.innerWidth
+    )
+      return false;
     const s = style || getComputedStyle(el);
-    return s.display !== 'none' && s.visibility !== 'hidden' && Number(s.opacity || '1') > 0.01;
+    return (
+      s.display !== "none" &&
+      s.visibility !== "hidden" &&
+      Number(s.opacity || "1") > 0.01
+    );
   }
 
   function pageFamily() {
-    const intent = state.siteProfile?.intent || 'generic';
-    if (intent === 'comparative') return 'compare';
-    if (intent === 'utility') return 'act';
-    if (['article', 'timeline', 'chat', 'gmail'].includes(intent)) return 'read';
-    return 'read';
+    const intent = state.siteProfile?.intent || "generic";
+    if (intent === "comparative") return "compare";
+    if (intent === "utility") return "act";
+    if (["article", "timeline", "chat", "gmail"].includes(intent))
+      return "read";
+    return "read";
   }
 
   function isEditable(el) {
@@ -501,12 +637,17 @@
     if (!parent) return 0;
     const children = [...parent.children].filter((child) => isVisible(child));
     if (children.length < 4) return 0;
-    const sameTag = children.filter((child) => child.tagName === el.tagName).length;
+    const sameTag = children.filter(
+      (child) => child.tagName === el.tagName,
+    ).length;
     let similar = 0;
     const base = baseRect || el.getBoundingClientRect();
     for (const child of children.slice(0, 12)) {
       const r = child.getBoundingClientRect();
-      if (Math.abs(r.height - base.height) < Math.max(24, base.height * 0.35) && Math.abs(r.width - base.width) < Math.max(40, base.width * 0.35)) {
+      if (
+        Math.abs(r.height - base.height) < Math.max(24, base.height * 0.35) &&
+        Math.abs(r.width - base.width) < Math.max(40, base.width * 0.35)
+      ) {
         similar += 1;
       }
     }
@@ -518,8 +659,7 @@
     try {
       return [...el.querySelectorAll(READ_SURFACE_SELECTOR)]
         .filter((child) => child !== el && isVisible(child))
-        .slice(0, 8)
-        .length;
+        .slice(0, 8).length;
     } catch (_) {
       return 0;
     }
@@ -527,7 +667,11 @@
 
   function isBroadReadContainer(el, areaRatio) {
     const tag = el?.tagName?.toLowerCase();
-    return tag === 'main' || el?.getAttribute?.('role') === 'main' || areaRatio > 0.55;
+    return (
+      tag === "main" ||
+      el?.getAttribute?.("role") === "main" ||
+      areaRatio > 0.55
+    );
   }
 
   function pointerPoint() {
@@ -537,27 +681,49 @@
   function readingBandPoint() {
     return {
       x: Math.round(window.innerWidth * 0.5),
-      y: Math.round(window.innerHeight * clamp(Number(state.settings.readingBandY) || 0.42, 0.2, 0.75))
+      y: Math.round(
+        window.innerHeight *
+          clamp(Number(state.settings.readingBandY) || 0.42, 0.2, 0.75),
+      ),
     };
   }
 
   function findInteractionShell(start) {
     if (!start) return null;
-    let node = isEditable(start) || isInteractive(start) ? start : start.closest?.(EDITABLE_SELECTOR) || start.closest?.(INTERACTIVE_SELECTOR) || start;
+    let node =
+      isEditable(start) || isInteractive(start)
+        ? start
+        : start.closest?.(EDITABLE_SELECTOR) ||
+          start.closest?.(INTERACTIVE_SELECTOR) ||
+          start;
     const selectors = [
-      '[role="dialog"]', '[aria-modal="true"]', 'dialog',
-      'form', '[data-testid*="composer" i]', '[class*="composer" i]', '[class*="reply" i]',
-      '[class*="editor" i]', '[class*="input" i]', '[class*="prompt" i]', '[class*="comment" i]',
-      'footer'
+      '[role="dialog"]',
+      '[aria-modal="true"]',
+      "dialog",
+      "form",
+      '[data-testid*="composer" i]',
+      '[class*="composer" i]',
+      '[class*="reply" i]',
+      '[class*="editor" i]',
+      '[class*="input" i]',
+      '[class*="prompt" i]',
+      '[class*="comment" i]',
+      "footer",
     ];
     const shell = closestAny(node, selectors);
     if (shell && isVisible(shell)) return shell;
     let cur = node;
     while (cur && cur !== document.body && cur !== document.documentElement) {
       const r = cur.getBoundingClientRect();
-      if (r.width > 180 && r.height > 56 && r.width < window.innerWidth * 0.96 && r.height < window.innerHeight * 0.72) {
+      if (
+        r.width > 180 &&
+        r.height > 56 &&
+        r.width < window.innerWidth * 0.96 &&
+        r.height < window.innerHeight * 0.72
+      ) {
         const edits = cur.querySelectorAll?.(EDITABLE_SELECTOR).length || 0;
-        const buttons = cur.querySelectorAll?.('button, [role="button"]').length || 0;
+        const buttons =
+          cur.querySelectorAll?.('button, [role="button"]').length || 0;
         if (edits || buttons >= 2) return cur;
       }
       cur = cur.parentElement;
@@ -567,13 +733,21 @@
 
   function findComparativeShell(start) {
     if (!start) return null;
-    const direct = closestAny(start, ['table', '[role="table"]', '[role="grid"]', '[class*="table" i]', '[class*="grid" i]', '[class*="list" i]']);
+    const direct = closestAny(start, [
+      "table",
+      '[role="table"]',
+      '[role="grid"]',
+      '[class*="table" i]',
+      '[class*="grid" i]',
+      '[class*="list" i]',
+    ]);
     if (direct && isVisible(direct)) return direct;
     let cur = start;
     while (cur && cur !== document.body && cur !== document.documentElement) {
       const repeated = repeatedSiblingPattern(cur);
       const r = cur.getBoundingClientRect();
-      if (repeated >= 4 && r.width > window.innerWidth * 0.38 && r.height > 120) return cur.parentElement || cur;
+      if (repeated >= 4 && r.width > window.innerWidth * 0.38 && r.height > 120)
+        return cur.parentElement || cur;
       cur = cur.parentElement;
     }
     return null;
@@ -584,7 +758,11 @@
     const base = document.elementFromPoint(x, y);
     if (!base) return [];
     let node = base;
-    while (node && node !== document.body && node !== document.documentElement) {
+    while (
+      node &&
+      node !== document.body &&
+      node !== document.documentElement
+    ) {
       candidates.add(node);
       const preferred = closestAny(node, state.siteProfile?.surfaceSelectors);
       if (preferred) candidates.add(preferred);
@@ -593,13 +771,21 @@
       node = node.parentElement;
     }
 
-    for (const selector of selectorList(state.siteProfile?.quickSelectors).slice(0, 6)) {
+    for (const selector of selectorList(
+      state.siteProfile?.quickSelectors,
+    ).slice(0, 6)) {
       try {
         const nearby = document.querySelectorAll(selector);
         for (const el of nearby) {
           if (!isVisible(el)) continue;
           const r = el.getBoundingClientRect();
-          if (x >= r.left - 48 && x <= r.right + 48 && y >= r.top - 48 && y <= r.bottom + 48) candidates.add(el);
+          if (
+            x >= r.left - 48 &&
+            x <= r.right + 48 &&
+            y >= r.top - 48 &&
+            y <= r.bottom + 48
+          )
+            candidates.add(el);
         }
       } catch (_) {}
     }
@@ -608,43 +794,81 @@
 
   function candidateScore(el, point, family) {
     if (!el || !document.contains(el)) return -Infinity;
-    if (matchesAny(el, state.siteProfile?.rejectSelectors) || containsRejectToken(el)) return -Infinity;
+    if (
+      matchesAny(el, state.siteProfile?.rejectSelectors) ||
+      containsRejectToken(el)
+    )
+      return -Infinity;
     const style = getComputedStyle(el);
-    if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity || '1') <= 0.01) return -Infinity;
-    if ((style.position === 'fixed' || style.position === 'sticky') && !isEditable(el) && !isInteractive(el)) return -90;
+    if (
+      style.display === "none" ||
+      style.visibility === "hidden" ||
+      Number(style.opacity || "1") <= 0.01
+    )
+      return -Infinity;
+    if (
+      (style.position === "fixed" || style.position === "sticky") &&
+      !isEditable(el) &&
+      !isInteractive(el)
+    )
+      return -90;
     const r = el.getBoundingClientRect();
     if (!isVisible(el, r, style)) return -Infinity;
     const viewportArea = Math.max(1, window.innerWidth * window.innerHeight);
     const area = Math.max(1, r.width * r.height);
     const areaRatio = area / viewportArea;
     let score = 0;
-    if (pointInsideRect(point.x, point.y, { ...r, right: r.right, bottom: r.bottom }, 0)) score += 24;
-    score -= Math.min(distance(point.x, point.y, r.left + r.width / 2, r.top + r.height / 2) / 40, 18);
+    if (
+      pointInsideRect(
+        point.x,
+        point.y,
+        { ...r, right: r.right, bottom: r.bottom },
+        0,
+      )
+    )
+      score += 24;
+    score -= Math.min(
+      distance(point.x, point.y, r.left + r.width / 2, r.top + r.height / 2) /
+        40,
+      18,
+    );
     if (matchesAny(el, state.siteProfile?.surfaceSelectors)) score += 12;
     if (matchesAny(el, state.siteProfile?.preferSelectors)) score += 8;
     if (matchesAny(el, state.siteProfile?.quickSelectors)) score += 4;
-    if (el.tagName.toLowerCase() === 'article' || el.getAttribute('role') === 'article' || el.tagName.toLowerCase() === 'main') score += 10;
+    if (
+      el.tagName.toLowerCase() === "article" ||
+      el.getAttribute("role") === "article" ||
+      el.tagName.toLowerCase() === "main"
+    )
+      score += 10;
 
-    const textLen = (el.textContent || '').trim().length;
-    const interactiveCount = el.querySelectorAll?.('button, [role="button"], input, textarea, select, a[href]').length || 0;
-    const paragraphCount = family === 'read' ? el.querySelectorAll?.('p, li, blockquote').length || 0 : 0;
-    const rowLike = family === 'compare' ? repeatedSiblingPattern(el, r) : 0;
+    const textLen = (el.textContent || "").trim().length;
+    const interactiveCount =
+      el.querySelectorAll?.(
+        'button, [role="button"], input, textarea, select, a[href]',
+      ).length || 0;
+    const paragraphCount =
+      family === "read"
+        ? el.querySelectorAll?.("p, li, blockquote").length || 0
+        : 0;
+    const rowLike = family === "compare" ? repeatedSiblingPattern(el, r) : 0;
 
-    if (family === 'read') {
+    if (family === "read") {
       score += Math.min(textLen / 80, 28);
       score += Math.min(paragraphCount * 1.8, 10);
       score -= Math.min(interactiveCount, 20) * 0.8;
       if (matchesAny(el, [READ_SURFACE_SELECTOR])) score += 12;
       if (areaRatio >= 0.04 && areaRatio <= 0.42) score += 8;
       if (areaRatio > 0.55) score -= Math.min((areaRatio - 0.55) * 48, 22);
-      if (isBroadReadContainer(el, areaRatio)) score -= Math.min(readSurfaceChildCount(el) * 7, 28);
+      if (isBroadReadContainer(el, areaRatio))
+        score -= Math.min(readSurfaceChildCount(el) * 7, 28);
       if (areaRatio > 0.9) score -= 18;
       if (areaRatio < 0.02) score -= 12;
-    } else if (family === 'compare') {
+    } else if (family === "compare") {
       score += Math.min(rowLike * 4, 18);
       if (areaRatio > 0.18 && areaRatio < 0.92) score += 12;
       if (el.matches?.('tr, [role="row"]')) score -= 30;
-    } else if (family === 'create' || family === 'act') {
+    } else if (family === "create" || family === "act") {
       const editables = el.querySelectorAll?.(EDITABLE_SELECTOR).length || 0;
       score += editables ? 18 : 0;
       score += Math.min(interactiveCount, 18) * 1.2;
@@ -667,22 +891,35 @@
     }
 
     if (!best || bestScore < -10) {
-      const fallbackSelectors = selectorList(state.siteProfile?.fallbackSelectors);
-      const fallback = closestAny(document.elementFromPoint(point.x, point.y), fallbackSelectors)
-        || (fallbackSelectors.length ? document.querySelector(fallbackSelectors.join(',')) : null);
+      const fallbackSelectors = selectorList(
+        state.siteProfile?.fallbackSelectors,
+      );
+      const fallback =
+        closestAny(
+          document.elementFromPoint(point.x, point.y),
+          fallbackSelectors,
+        ) ||
+        (fallbackSelectors.length
+          ? document.querySelector(fallbackSelectors.join(","))
+          : null);
       if (fallback && isVisible(fallback)) best = fallback;
     }
     return best;
   }
 
   function nearestSurfaceFromPoint(family, point, sourceEl = null) {
-    if (family === 'create' || family === 'act') {
-      const origin = sourceEl || document.elementFromPoint(point.x, point.y) || document.activeElement;
+    if (family === "create" || family === "act") {
+      const origin =
+        sourceEl ||
+        document.elementFromPoint(point.x, point.y) ||
+        document.activeElement;
       return findInteractionShell(origin);
     }
-    if (family === 'compare') {
+    if (family === "compare") {
       const origin = sourceEl || document.elementFromPoint(point.x, point.y);
-      return findComparativeShell(origin) || bestSurfaceNearPoint(point, family);
+      return (
+        findComparativeShell(origin) || bestSurfaceNearPoint(point, family)
+      );
     }
     return bestSurfaceNearPoint(point, family);
   }
@@ -692,11 +929,17 @@
   }
 
   function visibleElementCenter(el) {
-    if (!el || el === document.body || el === document.documentElement || !isVisible(el)) return null;
+    if (
+      !el ||
+      el === document.body ||
+      el === document.documentElement ||
+      !isVisible(el)
+    )
+      return null;
     const rect = el.getBoundingClientRect();
     return {
       x: clamp(rect.left + rect.width / 2, 0, window.innerWidth),
-      y: clamp(rect.top + rect.height / 2, 0, window.innerHeight)
+      y: clamp(rect.top + rect.height / 2, 0, window.innerHeight),
     };
   }
 
@@ -704,12 +947,17 @@
     const active = document.activeElement;
     if (isEditable(active) || isInteractive(active)) {
       const surface = findInteractionShell(active);
-      if (surface && isVisible(surface)) return { surface, family: isEditable(active) ? 'create' : 'act' };
+      if (surface && isVisible(surface))
+        return { surface, family: isEditable(active) ? "create" : "act" };
     }
 
     const activePoint = visibleElementCenter(active);
     if (activePoint) {
-      const activeSurface = nearestSurfaceFromPoint(family, activePoint, active);
+      const activeSurface = nearestSurfaceFromPoint(
+        family,
+        activePoint,
+        active,
+      );
       if (activeSurface) return { surface: activeSurface, family };
     }
 
@@ -721,11 +969,19 @@
   }
 
   function activeTyping() {
-    return nowTs() - state.lastKeyAt < 900 && state.actionLockEl && document.contains(state.actionLockEl);
+    return (
+      nowTs() - state.lastKeyAt < 900 &&
+      state.actionLockEl &&
+      document.contains(state.actionLockEl)
+    );
   }
 
   function actionLockActive() {
-    return !!(state.actionLockEl && document.contains(state.actionLockEl) && nowTs() < state.actionUntil);
+    return !!(
+      state.actionLockEl &&
+      document.contains(state.actionLockEl) &&
+      nowTs() < state.actionUntil
+    );
   }
 
   function actionSurfaceShouldWin() {
@@ -733,9 +989,17 @@
     if (activeTyping()) return true;
     const shell = findInteractionShell(state.actionLockEl);
     if (!shell) return false;
-    const pointerInside = pointInsideRect(state.pointerX, state.pointerY, shell.getBoundingClientRect(), 24);
+    const pointerInside = pointInsideRect(
+      state.pointerX,
+      state.pointerY,
+      shell.getBoundingClientRect(),
+      24,
+    );
     if (pointerInside) return true;
-    return nowTs() - state.lastInteractionAt < (state.settings.pointerPriorityMs || 220);
+    return (
+      nowTs() - state.lastInteractionAt <
+      (state.settings.pointerPriorityMs || 220)
+    );
   }
 
   function attachObservers(surface) {
@@ -743,12 +1007,21 @@
     if (state.mutationObserver) state.mutationObserver.disconnect();
     if (!surface) return;
 
-    state.resizeObserver = new ResizeObserver(() => scheduleSurfaceRefresh('resize'));
+    state.resizeObserver = new ResizeObserver(() =>
+      scheduleSurfaceRefresh("resize"),
+    );
     state.resizeObserver.observe(surface);
-    if (surface.parentElement) state.resizeObserver.observe(surface.parentElement);
+    if (surface.parentElement)
+      state.resizeObserver.observe(surface.parentElement);
 
-    state.mutationObserver = new MutationObserver(() => scheduleSurfaceRefresh('mutation'));
-    state.mutationObserver.observe(surface, { childList: true, subtree: true, characterData: true });
+    state.mutationObserver = new MutationObserver(() =>
+      scheduleSurfaceRefresh("mutation"),
+    );
+    state.mutationObserver.observe(surface, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
   }
 
   function clearObservers() {
@@ -800,7 +1073,7 @@
   }
 
   function scheduleSurfaceRefresh(_reason) {
-    if (_reason === 'mutation') {
+    if (_reason === "mutation") {
       clearTimeout(state.mutationRefreshTimer);
       state.mutationRefreshTimer = setTimeout(() => {
         state.mutationRefreshTimer = null;
@@ -817,7 +1090,7 @@
     const delay = Math.max(120, effectiveAutoAcquireDelay());
     state.transitionTimer = setTimeout(() => {
       if (!canAutoRun() || state.pinned) return;
-      acquireSurface('transition');
+      acquireSurface("transition");
     }, delay);
   }
 
@@ -831,7 +1104,11 @@
     clearInterval(state.routePollId);
     clearHideTimer();
     cancelAnimationFrame(state.rafId);
-    state.hoverTimer = state.previewTimer = state.scrollTimer = state.transitionTimer = null;
+    state.hoverTimer =
+      state.previewTimer =
+      state.scrollTimer =
+      state.transitionTimer =
+        null;
     state.mutationRefreshTimer = state.routeCheckTimer = null;
     state.routePollId = null;
     state.rafId = 0;
@@ -843,24 +1120,41 @@
 
   function effectiveAutoAcquireDelay() {
     if (state.actionLockEl && !activeTyping()) {
-      return Math.min(autoAcquireCooldownRemaining(), Math.max(0, state.actionUntil - nowTs()));
+      return Math.min(
+        autoAcquireCooldownRemaining(),
+        Math.max(0, state.actionUntil - nowTs()),
+      );
     }
     return autoAcquireCooldownRemaining();
   }
 
-  function bumpAutoAcquireCooldown(ms = state.settings.refocusCooldownMs ?? 5000) {
+  function bumpAutoAcquireCooldown(
+    ms = state.settings.refocusCooldownMs ?? 5000,
+  ) {
     const until = nowTs() + ms;
     if (until > state.nextAutoAcquireAt) state.nextAutoAcquireAt = until;
   }
 
   function autoAcquireBlocked(reason) {
-    if (reason === 'manual' || reason === 'click' || reason === 'focus' || reason === 'keydown' || reason === 'scroll' || reason === 'hover') return false;
-    if (state.actionLockEl && !activeTyping() && nowTs() >= state.actionUntil) return false;
+    if (
+      reason === "manual" ||
+      reason === "click" ||
+      reason === "focus" ||
+      reason === "keydown" ||
+      reason === "scroll" ||
+      reason === "hover"
+    )
+      return false;
+    if (state.actionLockEl && !activeTyping() && nowTs() >= state.actionUntil)
+      return false;
     return autoAcquireCooldownRemaining() > 0;
   }
 
   function usePointerReadTruth() {
-    return nowTs() - state.lastPointerMoveAt > state.settings.dwellMs && !activeTyping();
+    return (
+      nowTs() - state.lastPointerMoveAt > state.settings.dwellMs &&
+      !activeTyping()
+    );
   }
 
   function acquireSurface(reason) {
@@ -872,18 +1166,18 @@
     let point = pointerPoint();
 
     if (actionSurfaceShouldWin()) {
-      family = state.actionLockMode || 'create';
+      family = state.actionLockMode || "create";
       sourceEl = state.actionLockEl;
     }
 
-    if (reason === 'hover' || reason === 'transition') {
+    if (reason === "hover" || reason === "transition") {
       if (usePointerReadTruth()) {
         family = pageFamily();
         sourceEl = null;
       }
     }
 
-    if (reason === 'scroll' && !actionSurfaceShouldWin()) {
+    if (reason === "scroll" && !actionSurfaceShouldWin()) {
       family = pageFamily();
       sourceEl = null;
       point = readingBandPoint();
@@ -891,7 +1185,7 @@
 
     let surface = nearestSurfaceFromPoint(family, point, sourceEl);
 
-    if (!surface && family !== 'read') {
+    if (!surface && family !== "read") {
       surface = nearestSurfaceFromPoint(pageFamily(), point);
       family = pageFamily();
     }
@@ -910,13 +1204,19 @@
     if (!canAutoRun() || !state.settings.autoOnHover || state.pinned) return;
     const delay = state.settings.dwellMs;
     state.hoverTimer = setTimeout(() => {
-      acquireSurface('hover');
+      acquireSurface("hover");
     }, delay);
   }
 
   function queueBoundaryPreview() {
     clearTimeout(state.previewTimer);
-    if (!canAutoRun() || !state.settings.autoOnHover || state.pinned || state.visible) return;
+    if (
+      !canAutoRun() ||
+      !state.settings.autoOnHover ||
+      state.pinned ||
+      state.visible
+    )
+      return;
     state.previewTimer = setTimeout(() => {
       if (!canAutoRun() || state.pinned || state.visible) return;
       const surface = nearestSurfaceFromPointer(pageFamily());
@@ -928,9 +1228,12 @@
   function queueScrollAcquire() {
     clearTimeout(state.scrollTimer);
     if (!canAutoRun() || !state.settings.autoOnScroll || state.pinned) return;
-    const delay = Math.max(state.settings.scrollIdleMs, effectiveAutoAcquireDelay());
+    const delay = Math.max(
+      state.settings.scrollIdleMs,
+      effectiveAutoAcquireDelay(),
+    );
     state.scrollTimer = setTimeout(() => {
-      acquireSurface('scroll');
+      acquireSurface("scroll");
     }, delay);
   }
 
@@ -944,21 +1247,37 @@
   function maybeHideOnPointerExit() {
     if (!state.visible || !state.activeRect || state.pinned) return;
     const buffer = state.settings.revealBuffer;
-    if (!pointInsideRect(state.pointerX, state.pointerY, state.activeRect, buffer)) {
-      const farOutside = !pointInsideRect(state.pointerX, state.pointerY, state.activeRect, buffer * 2.2);
+    if (
+      !pointInsideRect(state.pointerX, state.pointerY, state.activeRect, buffer)
+    ) {
+      const farOutside = !pointInsideRect(
+        state.pointerX,
+        state.pointerY,
+        state.activeRect,
+        buffer * 2.2,
+      );
       hideOverlay(farOutside);
     }
   }
 
   function onPointerMove(event) {
-    const moved = distance(state.pointerX, state.pointerY, event.clientX, event.clientY);
+    const moved = distance(
+      state.pointerX,
+      state.pointerY,
+      event.clientX,
+      event.clientY,
+    );
     state.pointerX = event.clientX;
     state.pointerY = event.clientY;
     state.lastPointerMoveAt = nowTs();
     state.hasUserInteracted = true;
 
     if (moved >= state.settings.stationaryTolerance) {
-      if (state.visible && state.activeRect && pointInsideRect(state.pointerX, state.pointerY, state.activeRect, 0)) {
+      if (
+        state.visible &&
+        state.activeRect &&
+        pointInsideRect(state.pointerX, state.pointerY, state.activeRect, 0)
+      ) {
         maybeHideOnPointerExit();
         return;
       }
@@ -972,7 +1291,12 @@
 
   function onScroll(event) {
     const target = event?.target;
-    const isDocumentScroll = target === document || target === window || target === document.documentElement || target === document.body || target === document.scrollingElement;
+    const isDocumentScroll =
+      target === document ||
+      target === window ||
+      target === document.documentElement ||
+      target === document.body ||
+      target === document.scrollingElement;
     if (!isDocumentScroll && !state.activeSurface) return;
     state.hasUserInteracted = true;
     state.lastScrollAt = nowTs();
@@ -980,7 +1304,7 @@
     clearTimeout(state.previewTimer);
     state.hoverTimer = state.previewTimer = null;
     bumpAutoAcquireCooldown();
-    if (state.activeSurface && !state.pinned) scheduleSurfaceRefresh('scroll');
+    if (state.activeSurface && !state.pinned) scheduleSurfaceRefresh("scroll");
     else if (!state.pinned) {
       if (state.visible) hideOverlay(true);
       else clearPreview();
@@ -991,12 +1315,20 @@
   function onFocusIn(event) {
     const target = event.target;
     if (isEditable(target)) {
-      recordActionLock(target, 'create');
-      if (canAutoRun() && pointInsideRect(state.pointerX, state.pointerY, target.getBoundingClientRect(), 24)) {
-        switchSurface(findInteractionShell(target), 'create');
+      recordActionLock(target, "create");
+      if (
+        canAutoRun() &&
+        pointInsideRect(
+          state.pointerX,
+          state.pointerY,
+          target.getBoundingClientRect(),
+          24,
+        )
+      ) {
+        switchSurface(findInteractionShell(target), "create");
       }
     } else if (isInteractive(target)) {
-      recordActionLock(target, 'act');
+      recordActionLock(target, "act");
     }
   }
 
@@ -1005,19 +1337,27 @@
     state.lastClickAt = nowTs();
     const target = event.target;
     if (isEditable(target)) {
-      recordActionLock(target, 'create');
-      if (canAutoRun()) switchSurface(findInteractionShell(target), 'create');
+      recordActionLock(target, "create");
+      if (canAutoRun()) switchSurface(findInteractionShell(target), "create");
       return;
     }
     if (isInteractive(target)) {
-      recordActionLock(target, 'act');
-      if (state.visible && state.activeRect && pointInsideRect(event.clientX, event.clientY, state.activeRect, 0)) {
-        scheduleSurfaceRefresh('click');
+      recordActionLock(target, "act");
+      if (
+        state.visible &&
+        state.activeRect &&
+        pointInsideRect(event.clientX, event.clientY, state.activeRect, 0)
+      ) {
+        scheduleSurfaceRefresh("click");
       }
       return;
     }
 
-    if (event.shiftKey && canManualRun() && (getSelection()?.isCollapsed ?? true)) {
+    if (
+      event.shiftKey &&
+      canManualRun() &&
+      (getSelection()?.isCollapsed ?? true)
+    ) {
       const surface = nearestSurfaceFromPointer(pageFamily(), target);
       if (surface) switchSurface(surface, pageFamily(), { pin: true });
     }
@@ -1027,15 +1367,19 @@
     const activeElement = document.activeElement;
     if (isEditable(activeElement)) {
       state.lastKeyAt = nowTs();
-      recordActionLock(activeElement, 'create');
-      if (state.activeMode === 'create' && state.activeSurface?.contains(activeElement)) {
-        if (canAutoRun()) scheduleSurfaceRefresh('keydown');
+      recordActionLock(activeElement, "create");
+      if (
+        state.activeMode === "create" &&
+        state.activeSurface?.contains(activeElement)
+      ) {
+        if (canAutoRun()) scheduleSurfaceRefresh("keydown");
         return;
       }
-      if (canAutoRun()) switchSurface(findInteractionShell(activeElement), 'create');
+      if (canAutoRun())
+        switchSurface(findInteractionShell(activeElement), "create");
       return;
     }
-    if (event.key === 'Escape') {
+    if (event.key === "Escape") {
       state.pinned = false;
       state.actionLockEl = null;
       state.actionUntil = 0;
@@ -1069,58 +1413,61 @@
       siteMode: currentSiteMode(),
       autoBlockedReason: autoBlockedReason(),
       activeMode: state.activeMode,
-      profile: state.siteProfile?.id || 'generic'
+      profile: state.siteProfile?.id || "generic",
     };
   }
 
   function pushRuntimeState() {
     try {
-      chrome.runtime.sendMessage({ type: 'UMBRA_STATE_PUSH', state: runtimeState() })?.catch?.(() => {});
+      chrome.runtime
+        .sendMessage({ type: "UMBRA_STATE_PUSH", state: runtimeState() })
+        ?.catch?.(() => {});
     } catch (_) {}
   }
 
   function setupRuntime() {
     state.runtimeMessageHandler = (message, _sender, sendResponse) => {
       try {
-      if (!message || typeof message !== 'object') return;
-      if (message.type === 'UMBRA_GET_STATE') {
-        sendResponse(runtimeState());
-        return true;
-      }
-      if (message.type === 'UMBRA_TOGGLE_TAB_PAUSE') {
-        state.pausedForTab = !state.pausedForTab;
-        if (state.pausedForTab) {
-          state.pinned = false;
-          clearObservers();
-          hideOverlay(true);
-        } else {
-          scheduleReacquire();
+        if (!message || typeof message !== "object") return;
+        if (message.type === "UMBRA_GET_STATE") {
+          sendResponse(runtimeState());
+          return true;
         }
-        pushRuntimeState();
-        sendResponse({ pausedForTab: state.pausedForTab });
-        return true;
-      }
-      if (message.type === 'UMBRA_FOCUS_NOW') {
-        if (canManualRun()) {
-          const target = nearestManualSurface(pageFamily());
-          if (target?.surface) switchSurface(target.surface, target.family);
+        if (message.type === "UMBRA_TOGGLE_TAB_PAUSE") {
+          state.pausedForTab = !state.pausedForTab;
+          if (state.pausedForTab) {
+            state.pinned = false;
+            clearObservers();
+            hideOverlay(true);
+          } else {
+            scheduleReacquire();
+          }
+          pushRuntimeState();
+          sendResponse({ pausedForTab: state.pausedForTab });
+          return true;
         }
-        sendResponse({ ok: true });
-        return true;
-      }
-      if (message.type === 'UMBRA_PIN_NOW') {
-        if (canManualRun()) {
-          const target = nearestManualSurface(pageFamily());
-          if (target?.surface) switchSurface(target.surface, target.family, { pin: true });
+        if (message.type === "UMBRA_FOCUS_NOW") {
+          if (canManualRun()) {
+            const target = nearestManualSurface(pageFamily());
+            if (target?.surface) switchSurface(target.surface, target.family);
+          }
+          sendResponse({ ok: true });
+          return true;
         }
-        sendResponse({ ok: true });
-        return true;
-      }
-      return false;
+        if (message.type === "UMBRA_PIN_NOW") {
+          if (canManualRun()) {
+            const target = nearestManualSurface(pageFamily());
+            if (target?.surface)
+              switchSurface(target.surface, target.family, { pin: true });
+          }
+          sendResponse({ ok: true });
+          return true;
+        }
+        return false;
       } catch (err) {
-        log('message handler error', err);
+        log("message handler error", err);
         try {
-          sendResponse({ ok: false, error: 'UMBRA_CONTEXT_ERROR' });
+          sendResponse({ ok: false, error: "UMBRA_CONTEXT_ERROR" });
         } catch (_) {}
         return true;
       }
@@ -1130,9 +1477,10 @@
 
   function setupStorageWatcher() {
     state.storageChangedHandler = (changes, areaName) => {
-      if (areaName !== 'sync') return;
+      if (areaName !== "sync") return;
       const updates = {};
-      for (const [key, payload] of Object.entries(changes)) updates[key] = payload.newValue;
+      for (const [key, payload] of Object.entries(changes))
+        updates[key] = payload.newValue;
       applySettings({ ...state.settings, ...updates });
       state.siteProfile = resolveSiteProfile();
       pushRuntimeState();
@@ -1164,7 +1512,7 @@
   }
 
   function onNavigationNavigate(event) {
-    if (event?.finished && typeof event.finished.then === 'function') {
+    if (event?.finished && typeof event.finished.then === "function") {
       event.finished.then(queueLocationCheck).catch(queueLocationCheck);
       return;
     }
@@ -1179,15 +1527,18 @@
     state.lastHref = location.href;
     if (globalThis.navigation?.addEventListener) {
       state.navigationHandler = onNavigationNavigate;
-      globalThis.navigation.addEventListener('navigate', state.navigationHandler);
+      globalThis.navigation.addEventListener(
+        "navigate",
+        state.navigationHandler,
+      );
       return;
     }
-    window.addEventListener('popstate', onPopState);
+    window.addEventListener("popstate", onPopState);
     state.routePollId = setInterval(handleLocationChange, 500);
   }
 
   function onResize() {
-    scheduleSurfaceRefresh('resize');
+    scheduleSurfaceRefresh("resize");
   }
 
   function onVisibilityChange() {
@@ -1196,17 +1547,20 @@
   }
 
   function teardown() {
-    window.removeEventListener('mousemove', onPointerMove);
-    document.removeEventListener('scroll', onScroll, true);
-    window.removeEventListener('resize', onResize);
-    document.removeEventListener('focusin', onFocusIn, true);
-    document.removeEventListener('click', onClick, true);
-    document.removeEventListener('keydown', onKeyDown, true);
-    document.removeEventListener('visibilitychange', onVisibilityChange);
-    window.removeEventListener('pagehide', onPageHide);
-    window.removeEventListener('popstate', onPopState);
+    window.removeEventListener("mousemove", onPointerMove);
+    document.removeEventListener("scroll", onScroll, true);
+    window.removeEventListener("resize", onResize);
+    document.removeEventListener("focusin", onFocusIn, true);
+    document.removeEventListener("click", onClick, true);
+    document.removeEventListener("keydown", onKeyDown, true);
+    document.removeEventListener("visibilitychange", onVisibilityChange);
+    window.removeEventListener("pagehide", onPageHide);
+    window.removeEventListener("popstate", onPopState);
     if (state.navigationHandler && globalThis.navigation?.removeEventListener) {
-      globalThis.navigation.removeEventListener('navigate', state.navigationHandler);
+      globalThis.navigation.removeEventListener(
+        "navigate",
+        state.navigationHandler,
+      );
     }
     if (state.runtimeMessageHandler) {
       chrome.runtime.onMessage.removeListener(state.runtimeMessageHandler);
@@ -1248,7 +1602,7 @@
       pageFamily,
       rectForElement,
       handleLocationChange,
-      teardown
+      teardown,
     };
   }
 
@@ -1261,18 +1615,21 @@
     setupStorageWatcher();
     setupRouteWatcher();
 
-    window.addEventListener('mousemove', onPointerMove, { passive: true });
-    document.addEventListener('scroll', onScroll, { capture: true, passive: true });
-    window.addEventListener('resize', onResize, { passive: true });
-    document.addEventListener('focusin', onFocusIn, true);
-    document.addEventListener('click', onClick, true);
-    document.addEventListener('keydown', onKeyDown, true);
-    document.addEventListener('visibilitychange', onVisibilityChange);
-    window.addEventListener('pagehide', onPageHide);
+    window.addEventListener("mousemove", onPointerMove, { passive: true });
+    document.addEventListener("scroll", onScroll, {
+      capture: true,
+      passive: true,
+    });
+    window.addEventListener("resize", onResize, { passive: true });
+    document.addEventListener("focusin", onFocusIn, true);
+    document.addEventListener("click", onClick, true);
+    document.addEventListener("keydown", onKeyDown, true);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("pagehide", onPageHide);
 
     if (!canManualRun()) hideOverlay(true);
     pushRuntimeState();
   }
 
-  mount().catch((err) => console.error('[Umbra2 mount error]', err));
+  mount().catch((err) => console.error("[Umbra2 mount error]", err));
 })();

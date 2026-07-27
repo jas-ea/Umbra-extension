@@ -125,6 +125,11 @@ async function shellInfo(page) {
 }
 
 async function focusByHover(page, selector) {
+  await expect
+    .poll(async () =>
+      page.evaluate(() => !!document.getElementById("umbra-overlay-host")),
+    )
+    .toBe(true);
   const locator = page.locator(selector);
   await expect(locator).toBeVisible();
   const box = await locator.boundingBox();
@@ -153,6 +158,17 @@ async function sendExtensionMessage(context, page, message) {
 
 function expectClose(actual, expected, tolerance = 3) {
   expect(Math.abs(actual - expected)).toBeLessThanOrEqual(tolerance);
+}
+
+function expectRectCoversElement(shell, target, tolerance = 4) {
+  expectClose(shell.left, target.x - fastSettings.paddingX, tolerance);
+  expectClose(shell.top, target.y - fastSettings.paddingY, tolerance);
+  expectClose(shell.width, target.width + fastSettings.paddingX * 2, tolerance);
+  expectClose(
+    shell.height,
+    target.height + fastSettings.paddingY * 2,
+    tolerance,
+  );
 }
 
 test.describe("Umbra extension fixtures", () => {
@@ -203,6 +219,65 @@ test.describe("Umbra extension fixtures", () => {
     await expect
       .poll(async () => (await shellInfo(page))?.borderTopColor)
       .toBe("rgba(0, 0, 0, 0)");
+    await page.close();
+  });
+
+  test("targets a ChatGPT-like message inside a noisy app shell", async () => {
+    const page = await context.newPage();
+    await page.goto(`${server.origin}/noisy-chat-app.html`);
+    const target = await focusByHover(page, "#assistant-message-one");
+    const shell = await shellInfo(page);
+
+    expectRectCoversElement(shell, target);
+    expect(shell.maskVisible).toBe(true);
+    expect(shell.maskPath).toContain("A18 18");
+    await page.close();
+  });
+
+  test("switches cleanly between chat messages and ignores the sticky composer", async () => {
+    const page = await context.newPage();
+    await page.goto(`${server.origin}/noisy-chat-app.html`);
+    const firstTarget = await focusByHover(page, "#assistant-message-one");
+    const firstShell = await shellInfo(page);
+
+    const secondTarget = await focusByHover(page, "#assistant-message-two");
+    const secondShell = await shellInfo(page);
+    const composer = await page.locator("#composer-shell").boundingBox();
+
+    expectRectCoversElement(firstShell, firstTarget);
+    expectRectCoversElement(secondShell, secondTarget);
+    expect(secondShell.top).toBeGreaterThan(firstShell.top);
+    expect(
+      Math.abs(secondShell.top - (composer.y - fastSettings.paddingY)),
+    ).toBeGreaterThan(30);
+    await page.close();
+  });
+
+  test("targets an X-like timeline post instead of rails, ads, or drawers", async () => {
+    const page = await context.newPage();
+    await page.goto(`${server.origin}/noisy-social-feed.html`);
+    const target = await focusByHover(page, "#tweet-one");
+    const shell = await shellInfo(page);
+
+    expectRectCoversElement(shell, target);
+    expect(shell.maskVisible).toBe(true);
+    expect(shell.width).toBeLessThan(760);
+    await page.close();
+  });
+
+  test("switches cleanly across noisy timeline posts", async () => {
+    const page = await context.newPage();
+    await page.goto(`${server.origin}/noisy-social-feed.html`);
+    const firstTarget = await focusByHover(page, "#tweet-one");
+    const firstShell = await shellInfo(page);
+
+    const secondTarget = await focusByHover(page, "#tweet-two");
+    const secondShell = await shellInfo(page);
+
+    expectRectCoversElement(firstShell, firstTarget);
+    expectRectCoversElement(secondShell, secondTarget);
+    expect(secondShell.top).toBeGreaterThan(firstShell.top);
+    expect(secondShell.height).toBeLessThan(firstShell.height);
     await page.close();
   });
 
