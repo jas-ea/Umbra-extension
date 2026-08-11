@@ -111,6 +111,7 @@ Umbra runs locally in your browser:
 
 ## Documentation and contribution
 
+- `launch/README.md` (Cassini Research launch kit, screenshots, poster, and social copy)
 - `umbra-extension/README.md` (product overview and rules)
 - `umbra-extension/docs/ARCHITECTURE.md` (engine stages and design constraints)
 - `umbra-extension/docs/SITE_PROFILES.md` (how to add site-specific behavior)

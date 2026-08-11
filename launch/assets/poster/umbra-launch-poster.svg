@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">Umbra launch poster</title>
+  <desc id="desc">Launch poster showing Umbra focusing a real Stack Overflow page.</desc>
+  <defs>
+    <clipPath id="shotClip">
+      <rect x="660" y="126" width="806" height="504" rx="26"/>
+    </clipPath>
+    <radialGradient id="markFocus" cx="50%" cy="45%" r="60%">
+      <stop offset="0%" stop-color="#f4f2ff"/>
+      <stop offset="52%" stop-color="#d7d2ff"/>
+      <stop offset="100%" stop-color="#8ea7ff"/>
+    </radialGradient>
+    <linearGradient id="markRim" x1="0" y1="0" x2="120" y2="120" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#111827"/>
+      <stop offset="60%" stop-color="#1f2937"/>
+      <stop offset="100%" stop-color="#5b6ee1"/>
+    </linearGradient>
+  </defs>
+  <rect width="1600" height="900" fill="#f6f7fb"/>
+  <rect x="72" y="64" width="1456" height="772" rx="44" fill="#ffffff"/>
+  <g transform="translate(116 106)">
+    <rect width="92" height="92" rx="24" fill="#0b0d12"/>
+    <circle cx="46" cy="46" r="30" fill="none" stroke="url(#markRim)" stroke-width="11"/>
+    <circle cx="46" cy="46" r="14" fill="url(#markFocus)"/>
+  </g>
+  <text x="236" y="146" fill="#101216" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="40" font-weight="760" letter-spacing="0">Umbra</text>
+  <text x="236" y="186" fill="#5b6472" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="21" font-weight="540" letter-spacing="0">Cassini Research</text>
+  <text x="116" y="314" fill="#0d1117" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="76" font-weight="780" letter-spacing="0">Soft focus for</text>
+  <text x="116" y="392" fill="#0d1117" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="76" font-weight="780" letter-spacing="0">dense pages.</text>
+  <text x="118" y="470" fill="#374151" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="27" font-weight="460" letter-spacing="0">
+    <tspan x="118" dy="0">Umbra dims the surrounding page.</tspan>
+    <tspan x="118" dy="40">The original site stays interactive.</tspan>
+  </text>
+  <g transform="translate(118 590)">
+    <rect width="164" height="44" rx="22" fill="#eef2ff"/>
+    <text x="82" y="29" text-anchor="middle" fill="#27346d" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="18" font-weight="650">Articles</text>
+    <rect x="182" width="164" height="44" rx="22" fill="#edf7f1"/>
+    <text x="264" y="29" text-anchor="middle" fill="#1f5f3b" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="18" font-weight="650">Docs</text>
+  </g>
+  <rect x="630" y="96" width="866" height="564" rx="38" fill="#101216"/>
+  <rect x="660" y="126" width="806" height="504" rx="26" fill="#d1d5db"/>
+  <image href="../screenshots/stackoverflow-questions.png" x="660" y="126" width="806" height="504" preserveAspectRatio="xMidYMid slice" clip-path="url(#shotClip)"/>
+  <rect x="660" y="126" width="806" height="504" rx="26" fill="none" stroke="#ffffff" stroke-opacity="0.24"/>
+  <text x="663" y="704" fill="#4b5563" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="21" font-weight="520" letter-spacing="0">Live example: Stack Overflow question list</text>
+  <text x="118" y="774" fill="#6b7280" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="22" font-weight="520" letter-spacing="0">No reader view. No page rewrite. No telemetry.</text>
+</svg>

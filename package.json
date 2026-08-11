@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "lint": "eslint . && npm run format:check",
-    "format:check": "prettier --check README.md package.json package-lock.json eslint.config.js vitest.config.js playwright.config.js 'scripts/**/*.mjs' .github/workflows/ci.yml 'umbra-extension/**/*.{md,js,html,css,json}' 'test/**/*.js'",
+    "format:check": "prettier --check README.md package.json package-lock.json eslint.config.js vitest.config.js playwright.config.js 'scripts/**/*.mjs' .github/workflows/ci.yml 'umbra-extension/**/*.{md,js,html,css,json}' 'launch/**/*.md' 'test/**/*.js'",
     "test": "vitest run",
     "test:e2e": "playwright test",
     "validate": "node scripts/validate-extension.mjs",
