@@ -1,6 +1,6 @@
 # Umbra
 
-Umbra is a Manifest V3 Chrome extension that softly dims visual noise around the live page content you are reading. It does not replace the page with a reader view, rewrite the DOM, or send page content to a server.
+Umbra is a Manifest V3 Chrome extension from Cassini Research. It softly dims visual noise around the live page content you are reading. It does not replace the page with a reader view, rewrite the DOM, or send page content to a server.
 
 Current extension source lives in `umbra-extension/`.
 
@@ -115,4 +115,5 @@ Umbra runs locally in your browser:
 - `umbra-extension/docs/ARCHITECTURE.md` (engine stages and design constraints)
 - `umbra-extension/docs/SITE_PROFILES.md` (how to add site-specific behavior)
 - `umbra-extension/docs/ACCESSIBILITY.md` (system settings and assistive technology posture)
+- `umbra-extension/docs/STORE_LISTING.md` (Chrome Web Store listing copy and asset checklist)
 - `umbra-extension/CONTRIBUTING.md` (contribution workflow)

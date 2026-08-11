@@ -1,6 +1,6 @@
 # Privacy Policy
 
-Umbra does not collect, transmit, sell, or store personal browsing content on any external server.
+Umbra is published by Cassini Research. It does not collect, transmit, sell, or store personal browsing content on any external server.
 
 ## What the extension uses
 
@@ -26,4 +26,4 @@ Umbra stores user preferences only, in Chrome sync storage, solely to provide it
 
 Support and bug reports: https://github.com/jas-ea/Umbra-extension/issues
 
-_Last updated: 2026-06-29._
+_Last updated: 2026-08-11._

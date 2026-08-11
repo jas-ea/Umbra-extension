@@ -1,6 +1,6 @@
 # Umbra 2.2.2
 
-Umbra is a local-first focus layer for the live web. It dims surrounding chrome without rewriting pages, and it is designed to fail safe when unsure.
+Umbra is a local-first focus layer for the live web, published by Cassini Research. It dims surrounding chrome without rewriting pages, and it is designed to fail safe when unsure.
 
 ## Product rules
 
@@ -74,7 +74,7 @@ Umbra is deliberately conservative. If it cannot identify a trustworthy surface,
 - `site-profiles.js`: declarative site profiles and defaults
 - `popup.*`: quick controls
 - `options.*`: advanced settings
-- `docs/`: architecture, accessibility, and contribution notes
+- `docs/`: architecture, accessibility, site profile, and Chrome Web Store notes
 
 ## Contributing
 

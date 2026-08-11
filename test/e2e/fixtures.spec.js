@@ -124,7 +124,7 @@ async function shellInfo(page) {
   });
 }
 
-async function focusByHover(page, selector) {
+async function focusByHover(page, selector, options = {}) {
   await expect
     .poll(async () =>
       page.evaluate(() => !!document.getElementById("umbra-overlay-host")),
@@ -140,6 +140,10 @@ async function focusByHover(page, selector) {
       return shell?.visible && !shell?.preview && shell?.maskVisible;
     })
     .toBe(true);
+  if (options.waitForRect) {
+    const focused = await waitForFocusedRect(page, selector, options.tolerance);
+    return focused.target;
+  }
   return box;
 }
 
@@ -160,15 +164,36 @@ function expectClose(actual, expected, tolerance = 3) {
   expect(Math.abs(actual - expected)).toBeLessThanOrEqual(tolerance);
 }
 
-function expectRectCoversElement(shell, target, tolerance = 4) {
-  expectClose(shell.left, target.x - fastSettings.paddingX, tolerance);
-  expectClose(shell.top, target.y - fastSettings.paddingY, tolerance);
-  expectClose(shell.width, target.width + fastSettings.paddingX * 2, tolerance);
-  expectClose(
-    shell.height,
-    target.height + fastSettings.paddingY * 2,
-    tolerance,
+function rectCoversElement(shell, target, tolerance = 4) {
+  return (
+    Math.abs(shell.left - (target.x - fastSettings.paddingX)) <= tolerance &&
+    Math.abs(shell.top - (target.y - fastSettings.paddingY)) <= tolerance &&
+    Math.abs(shell.width - (target.width + fastSettings.paddingX * 2)) <=
+      tolerance &&
+    Math.abs(shell.height - (target.height + fastSettings.paddingY * 2)) <=
+      tolerance
   );
+}
+
+function expectRectCoversElement(shell, target, tolerance = 4) {
+  expect(rectCoversElement(shell, target, tolerance)).toBe(true);
+}
+
+async function waitForFocusedRect(page, selector, tolerance = 4) {
+  await expect
+    .poll(async () => {
+      const target = await page.locator(selector).boundingBox();
+      const shell = await shellInfo(page);
+      if (!target || !shell?.visible || shell.preview || !shell.maskVisible) {
+        return false;
+      }
+      return rectCoversElement(shell, target, tolerance);
+    })
+    .toBe(true);
+  return {
+    target: await page.locator(selector).boundingBox(),
+    shell: await shellInfo(page),
+  };
 }
 
 test.describe("Umbra extension fixtures", () => {
@@ -202,7 +227,9 @@ test.describe("Umbra extension fixtures", () => {
   test("cuts out the article surface with padding and toggles outline", async () => {
     const page = await context.newPage();
     await page.goto(`${server.origin}/article.html`);
-    const target = await focusByHover(page, "#target-article");
+    const target = await focusByHover(page, "#target-article", {
+      waitForRect: true,
+    });
     const shell = await shellInfo(page);
 
     expect(shell.ariaHidden).toBe("true");
@@ -225,7 +252,9 @@ test.describe("Umbra extension fixtures", () => {
   test("targets a ChatGPT-like message inside a noisy app shell", async () => {
     const page = await context.newPage();
     await page.goto(`${server.origin}/noisy-chat-app.html`);
-    const target = await focusByHover(page, "#assistant-message-one");
+    const target = await focusByHover(page, "#assistant-message-one", {
+      waitForRect: true,
+    });
     const shell = await shellInfo(page);
 
     expectRectCoversElement(shell, target);
@@ -237,10 +266,14 @@ test.describe("Umbra extension fixtures", () => {
   test("switches cleanly between chat messages and ignores the sticky composer", async () => {
     const page = await context.newPage();
     await page.goto(`${server.origin}/noisy-chat-app.html`);
-    const firstTarget = await focusByHover(page, "#assistant-message-one");
+    const firstTarget = await focusByHover(page, "#assistant-message-one", {
+      waitForRect: true,
+    });
     const firstShell = await shellInfo(page);
 
-    const secondTarget = await focusByHover(page, "#assistant-message-two");
+    const secondTarget = await focusByHover(page, "#assistant-message-two", {
+      waitForRect: true,
+    });
     const secondShell = await shellInfo(page);
     const composer = await page.locator("#composer-shell").boundingBox();
 
@@ -256,7 +289,9 @@ test.describe("Umbra extension fixtures", () => {
   test("targets an X-like timeline post instead of rails, ads, or drawers", async () => {
     const page = await context.newPage();
     await page.goto(`${server.origin}/noisy-social-feed.html`);
-    const target = await focusByHover(page, "#tweet-one");
+    const target = await focusByHover(page, "#tweet-one", {
+      waitForRect: true,
+    });
     const shell = await shellInfo(page);
 
     expectRectCoversElement(shell, target);
@@ -268,10 +303,14 @@ test.describe("Umbra extension fixtures", () => {
   test("switches cleanly across noisy timeline posts", async () => {
     const page = await context.newPage();
     await page.goto(`${server.origin}/noisy-social-feed.html`);
-    const firstTarget = await focusByHover(page, "#tweet-one");
+    const firstTarget = await focusByHover(page, "#tweet-one", {
+      waitForRect: true,
+    });
     const firstShell = await shellInfo(page);
 
-    const secondTarget = await focusByHover(page, "#tweet-two");
+    const secondTarget = await focusByHover(page, "#tweet-two", {
+      waitForRect: true,
+    });
     const secondShell = await shellInfo(page);
 
     expectRectCoversElement(firstShell, firstTarget);
@@ -385,7 +424,9 @@ test.describe("Umbra extension fixtures", () => {
   test("targets generic readable cards instead of the page shell", async () => {
     const page = await context.newPage();
     await page.goto(`${server.origin}/generic-cards.html`);
-    const target = await focusByHover(page, "#target-card");
+    const target = await focusByHover(page, "#target-card", {
+      waitForRect: true,
+    });
     const shell = await shellInfo(page);
 
     expectClose(shell.left, target.x - fastSettings.paddingX);

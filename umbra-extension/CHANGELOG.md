@@ -4,6 +4,7 @@
 
 - Tuned the default focus corner radius down to a cleaner, slightly rounded shape.
 - Added dense ChatGPT-like and social-feed browser fixtures to keep focus targeting honest on noisy pages.
+- Added Cassini Research publishing notes, store listing copy, and a CI package check for the Chrome Web Store zip.
 
 ## 2.2.1
 

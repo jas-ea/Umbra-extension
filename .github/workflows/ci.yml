@@ -36,3 +36,6 @@ jobs:
 
       - name: Validate extension
         run: npm run validate
+
+      - name: Package extension
+        run: npm run package:extension
