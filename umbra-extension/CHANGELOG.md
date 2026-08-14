@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.5.1
+
+- Prevented Gmail toolbars, category tabs, menus, and headers from becoming focus surfaces.
+- Limited inbox collection ownership to actual message rows and opened-message ownership to the message body.
+- Kept Gmail focus and click events on the normal dwell path instead of switching collections immediately.
+- Cleared stale action ownership during same-page navigation.
+- Prevented scheduled reacquisition from selecting an unplayed video in a side rail.
+- Added Gmail coverage for toolbar rejection, stable inbox scanning, and inbox-to-message handoff.
+
 ## 2.5.0
 
 - Replaced the conflicting hover cooldowns with a deterministic incumbent/challenger focus coordinator.

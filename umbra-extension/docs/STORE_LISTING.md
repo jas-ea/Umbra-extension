@@ -60,4 +60,4 @@ npm run validate
 npm run package:extension
 ```
 
-Upload `dist/umbra-2.5.0.zip`.
+Upload `dist/umbra-2.5.1.zip`.

@@ -105,7 +105,8 @@
       .workspace.active {
         display: grid;
       }
-      .toolbar {
+      .toolbar,
+      .mail-controls {
         display: flex;
         align-items: center;
         gap: 8px;
@@ -113,11 +114,48 @@
         border-bottom: 1px solid #30343d;
         background: #1a1d23;
       }
+      .mail-workspace {
+        grid-template-rows: 48px 44px minmax(0, 1fr);
+      }
+      .mail-sections {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(120px, 1fr));
+        border-bottom: 1px solid #30343d;
+        background: #171a20;
+      }
+      .mail-sections button {
+        border: 0;
+        border-bottom: 2px solid transparent;
+        background: transparent;
+      }
+      .mail-sections button[aria-selected="true"] {
+        border-bottom-color: #8aa4d6;
+      }
       .mail-grid,
       .calendar-grid,
-      .message-pane {
+      .message-pane,
+      .mail-detail {
         min-height: 0;
         overflow: auto;
+      }
+      .mail-detail {
+        padding: 28px 48px 80px;
+      }
+      .mail-detail[hidden] {
+        display: none;
+      }
+      .mail-detail:not([hidden]) {
+        grid-row: 2 / -1;
+      }
+      .mail-message {
+        max-width: 860px;
+        margin: 0 auto;
+        padding: 24px 28px;
+        border: 1px solid #343944;
+        background: #191c22;
+      }
+      .mail-message-copy p {
+        max-width: 72ch;
       }
       .mail-row {
         display: grid;
@@ -308,9 +346,14 @@
       </nav>
       <main role="main">
         <section class="workspace mail-workspace">
-          <div class="toolbar" role="toolbar">
-            <button>Select</button><button>Refresh</button
+          <div class="mail-controls" id="gmail-controls" role="toolbar">
+            <button>Select</button><button id="gmail-refresh">Refresh</button
             ><button>Archive</button><button>Filter</button>
+          </div>
+          <div class="mail-sections" id="inbox-sections" role="tablist">
+            <button role="tab" aria-selected="true">Primary</button>
+            <button role="tab" aria-selected="false">Updates</button>
+            <button role="tab" aria-selected="false">Forums</button>
           </div>
           <div
             id="inbox-grid"
@@ -367,6 +410,28 @@
               ><time>Mon</time>
             </div>
           </div>
+          <section class="mail-detail" id="opened-message-view" hidden>
+            <article class="mail-message adn ads" id="opened-message">
+              <header>
+                <h1>Production review and outstanding items</h1>
+                <p>Operations &lt;operations@example.com&gt;</p>
+              </header>
+              <div class="ii gt">
+                <div class="mail-message-copy a3s" id="opened-message-copy">
+                  <p>Hello team,</p>
+                  <p>
+                    The release review is ready. Please check the remaining
+                    production items and add any blocking details before the
+                    afternoon review.
+                  </p>
+                  <p>
+                    The message body should become the reading surface without
+                    promoting the toolbar or message controls around it.
+                  </p>
+                </div>
+              </div>
+            </article>
+          </section>
         </section>
         <section class="workspace calendar-workspace">
           <div class="toolbar" role="toolbar">
@@ -560,6 +625,13 @@
           : document.body.dataset.app === "calendar"
             ? "Calendar"
             : "Slack";
+      document
+        .querySelector("#mail-row-1 .subject")
+        .addEventListener("click", () => {
+          document.getElementById("inbox-grid").hidden = true;
+          document.getElementById("inbox-sections").hidden = true;
+          document.getElementById("opened-message-view").hidden = false;
+        });
       for (const trigger of document.querySelectorAll(
         '[aria-haspopup="menu"]',
       )) {

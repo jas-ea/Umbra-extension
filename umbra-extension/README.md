@@ -1,4 +1,4 @@
-# Umbra 2.5.0
+# Umbra 2.5.1
 
 Umbra keeps one block clear on a busy webpage while the original site stays interactive. It is a Manifest V3 Chrome extension published by Cassini Research.
 
@@ -70,7 +70,7 @@ npm run package:extension
 
 The browser suite covers noisy chat and feed layouts, Gmail-style inboxes, Calendar grids, Slack-style conversations and menus, video and fullscreen, adjacent-item handoff, stable dwell, manual area selection, nested scrolling, route changes, clipped geometry, reduced motion, forced colors, and text selection.
 
-The package command creates `dist/umbra-2.5.0.zip`.
+The package command creates `dist/umbra-2.5.1.zip`.
 
 ## Privacy
 

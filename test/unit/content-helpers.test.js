@@ -156,6 +156,35 @@ describe("content helper behavior", () => {
     expect(target.mode).toBe("scan");
   });
 
+  it("keeps strict workspace chrome out of collection ownership", async () => {
+    const { dom, api } = await loadContent(
+      '<main role="main"><div id="grid" role="grid"><div id="controls" role="toolbar"><button id="refresh">Refresh</button></div><div id="row" role="row">Mail</div></div></main>',
+    );
+    const grid = dom.window.document.getElementById("grid");
+    const controls = dom.window.document.getElementById("controls");
+    const refresh = dom.window.document.getElementById("refresh");
+    const row = dom.window.document.getElementById("row");
+    setRect(grid, rect(200, 80, 700, 500));
+    setRect(controls, rect(200, 80, 700, 48));
+    setRect(refresh, rect(220, 88, 90, 32));
+    setRect(row, rect(200, 128, 700, 56));
+    api.state.siteProfile = {
+      intent: "workspace",
+      strictTargeting: true,
+      collectionSelectors: ['[role="grid"]'],
+      collectionItemSelectors: ['[role="row"]'],
+      detailSelectors: [],
+      rejectSelectors: ['[role="toolbar"]'],
+      rejectTokens: [],
+    };
+
+    expect(api.collectionSurfaceFrom(refresh)).toBeNull();
+    expect(api.collectionSurfaceFrom(row)).toBe(grid);
+    expect(
+      api.resolvedTargetFromPoint("read", { x: 250, y: 100 }, refresh),
+    ).toBeNull();
+  });
+
   it("promotes a generic ARIA list while rejecting a navigation grid", async () => {
     const { dom, api } = await loadContent(
       '<nav><div id="mini" role="grid"><div id="mini-row" role="row">1</div><div role="row">2</div><div role="row">3</div><div role="row">4</div></div></nav><main><div id="tasks" role="list"><div id="task" role="listitem">A</div><div role="listitem">B</div><div role="listitem">C</div><div role="listitem">D</div></div></main>',

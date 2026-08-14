@@ -380,14 +380,29 @@ test.describe("Umbra extension fixtures", () => {
     await page.close();
   });
 
-  test("keeps a dense Gmail inbox visible as one scan surface", async () => {
+  test("keeps Gmail chrome inert and moves between inbox and message", async () => {
     const page = await context.newPage();
     await page.goto(`${server.gmailOrigin}/productivity-workspace.html`);
     await expect
       .poll(async () => (await extensionState(context, page))?.profile)
       .toBe("gmail");
 
-    await focusByHover(page, "#mail-row-1");
+    for (const selector of ["#gmail-controls", "#inbox-sections"]) {
+      await page.locator(selector).hover();
+      await page.waitForTimeout(fastSettings.dwellMs + 120);
+      const runtime = await extensionState(context, page);
+      expect(runtime?.hasActiveSurface || false).toBe(false);
+      expect((await shellInfo(page))?.maskVisible || false).toBe(false);
+    }
+
+    await page.locator("#gmail-refresh").click();
+    const firstRow = await page.locator("#mail-row-1").boundingBox();
+    await page.mouse.move(
+      firstRow.x + firstRow.width / 2,
+      firstRow.y + firstRow.height / 2,
+    );
+    await page.waitForTimeout(50);
+    expect((await extensionState(context, page))?.hasActiveSurface).toBe(false);
     await expect
       .poll(async () => activeSurfaceId(context, page))
       .toBe("inbox-grid");
@@ -396,9 +411,17 @@ test.describe("Umbra extension fixtures", () => {
     for (let index = 1; index < 5; index += 1) {
       const row = await rows.nth(index).boundingBox();
       await page.mouse.move(row.x + row.width / 2, row.y + row.height / 2);
-      await page.waitForTimeout(55);
+      await page.waitForTimeout(fastSettings.refocusDwellMs + 80);
+      expect(await activeSurfaceId(context, page)).toBe("inbox-grid");
     }
-    expect(await activeSurfaceId(context, page)).toBe("inbox-grid");
+
+    await page.locator("#mail-row-1 .subject").click();
+    await expect(page.locator("#opened-message-view")).toBeVisible();
+    await page.locator("#opened-message-copy").hover();
+    await expect
+      .poll(async () => activeSurfaceId(context, page))
+      .toBe("opened-message-copy");
+    expect((await extensionState(context, page))?.activeMode).toBe("read");
     await page.close();
   });
 
@@ -611,14 +634,16 @@ test.describe("Umbra extension fixtures", () => {
     const video = page.locator("#inline-video");
 
     await video.click();
-    await video.evaluate((element) => {
-      Object.defineProperties(element, {
-        paused: { configurable: true, get: () => false },
-        ended: { configurable: true, get: () => false },
-      });
+    await video.evaluate(async (element) => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 320;
+      canvas.height = 180;
+      canvas.getContext("2d").fillRect(0, 0, 320, 180);
+      window.__umbraTestVideoCanvas = canvas;
+      element.srcObject = canvas.captureStream(1);
       element.muted = false;
       element.volume = 1;
-      element.dispatchEvent(new Event("play"));
+      await element.play();
     });
     await expect
       .poll(async () => activeSurfaceId(context, page))
@@ -643,11 +668,28 @@ test.describe("Umbra extension fixtures", () => {
     await expect
       .poll(async () => (await shellInfo(page))?.maskVisible || false)
       .toBe(false);
+    await expect
+      .poll(
+        async () =>
+          (await extensionState(context, page))?.pictureInPictureMediaId || "",
+      )
+      .toBe("inline-video");
     await video.evaluate((element) => {
       element.dispatchEvent(
         new Event("leavepictureinpicture", { bubbles: true }),
       );
     });
+    await expect
+      .poll(
+        async () =>
+          (await extensionState(context, page))?.pictureInPictureMediaId || "",
+      )
+      .toBe("");
+    await expect
+      .poll(
+        async () => (await extensionState(context, page))?.activeMediaId || "",
+      )
+      .toBe("inline-video");
     await expect
       .poll(async () => activeSurfaceId(context, page))
       .toBe("inline-player");

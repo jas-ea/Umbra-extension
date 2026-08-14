@@ -1,5 +1,5 @@
 (() => {
-  const RUNTIME_VERSION = "2.5.0";
+  const RUNTIME_VERSION = "2.5.1";
   const previousRuntime = globalThis.UMBRA_RUNTIME;
   if (previousRuntime?.version === RUNTIME_VERSION) return;
   if (previousRuntime?.teardown) {
@@ -29,8 +29,6 @@
     '[role="menuitem"]',
     '[role="option"]',
     '[role="treeitem"]',
-    '[role="gridcell"]',
-    '[role="row"]',
     '[role="checkbox"]',
     '[role="switch"]',
     "[aria-haspopup]",
@@ -1227,8 +1225,27 @@
 
   function collectionSurfaceFrom(origin) {
     if (!origin?.closest || hasRejectedCollectionContext(origin)) return null;
-    const explicit = closestAny(origin, state.siteProfile?.collectionSelectors);
+    const collectionItem = closestAny(
+      origin,
+      state.siteProfile?.collectionItemSelectors,
+    );
+    const originIsCollection = matchesAny(
+      origin,
+      state.siteProfile?.collectionSelectors,
+    );
+    if (
+      state.siteProfile?.strictTargeting &&
+      !collectionItem &&
+      !originIsCollection
+    ) {
+      return null;
+    }
+    const explicit = closestAny(
+      collectionItem || origin,
+      state.siteProfile?.collectionSelectors,
+    );
     if (explicit && isVisible(explicit)) return explicit;
+    if (state.siteProfile?.strictTargeting) return null;
     const semantic = origin.closest(COMPOSITE_COLLECTION_SELECTOR);
     if (
       semantic &&
@@ -1283,15 +1300,24 @@
     return audible || recentlyActivated || ownsFocus;
   }
 
-  function resolvedTargetFromPoint(family, point, sourceEl = null) {
+  function resolvedTargetFromPoint(
+    family,
+    point,
+    sourceEl = null,
+    { allowPassiveMedia = true } = {},
+  ) {
     const origin =
       sourceEl || document.elementFromPoint(point.x, point.y) || null;
     if (!origin) return null;
     if (transientInteractionFrom(origin)) return { suspended: true };
 
     const directMedia = mediaSurfaceFrom(origin);
+    const directVideo = origin.closest?.(MEDIA_SELECTOR);
     if (directMedia) {
-      return { surface: directMedia, mode: "media", origin };
+      if (allowPassiveMedia || isStrongPlayingVideo(directVideo)) {
+        return { surface: directMedia, mode: "media", origin };
+      }
+      return null;
     }
 
     const detail = detailSurfaceFrom(origin);
@@ -1299,6 +1325,16 @@
 
     const collection = collectionSurfaceFrom(origin);
     if (collection) return { surface: collection, mode: "scan", origin };
+
+    if (state.siteProfile?.strictTargeting) {
+      const editable = isEditable(origin)
+        ? origin
+        : origin.closest?.(EDITABLE_SELECTOR);
+      const shell = editable ? findInteractionShell(editable) : null;
+      return shell && isVisible(shell)
+        ? { surface: shell, mode: "create", origin }
+        : null;
+    }
 
     const surface = nearestSurfaceFromPoint(family, point, sourceEl);
     if (!surface) return null;
@@ -1600,13 +1636,17 @@
       point = readingBandPoint(state.lastScrollContainer);
     }
 
-    let target = resolvedTargetFromPoint(family, point, sourceEl);
+    let target = resolvedTargetFromPoint(family, point, sourceEl, {
+      allowPassiveMedia: false,
+    });
     if (target?.suspended) {
       suspendAutomaticFocus();
       return null;
     }
     if (!target && family !== "read") {
-      target = resolvedTargetFromPoint(pageFamily(), point);
+      target = resolvedTargetFromPoint(pageFamily(), point, null, {
+        allowPassiveMedia: false,
+      });
     }
     if (!target) {
       schedulePointerExit();
@@ -1795,7 +1835,10 @@
     } else if (isInteractive(target)) {
       recordActionLock(target, "act");
       const collection = collectionSurfaceFrom(target);
-      if (collection && canAutoRun()) switchSurface(collection, "scan");
+      if (collection && canAutoRun()) {
+        if (state.siteProfile?.strictTargeting) queueHoverAcquire(target);
+        else switchSurface(collection, "scan");
+      }
     }
   }
 
@@ -1871,7 +1914,8 @@
       }
       const collection = collectionSurfaceFrom(target);
       if (collection && canAutoRun()) {
-        switchSurface(collection, "scan");
+        if (state.siteProfile?.strictTargeting) queueHoverAcquire(target);
+        else switchSurface(collection, "scan");
         return;
       }
       if (
@@ -2053,6 +2097,8 @@
     if (state.settings.debug) {
       snapshot.activeSurfaceId = state.activeSurface?.id || "";
       snapshot.activeSurfaceTag = state.activeSurface?.tagName || "";
+      snapshot.activeMediaId = state.activeMedia?.id || "";
+      snapshot.pictureInPictureMediaId = state.pictureInPictureMedia?.id || "";
     }
     return snapshot;
   }
@@ -2204,6 +2250,9 @@
     state.lastHref = location.href;
     state.siteProfile = resolveSiteProfile();
     state.pinned = false;
+    state.actionLockEl = null;
+    state.actionLockMode = null;
+    state.actionUntil = 0;
     state.activeSurface = null;
     state.activeMode = null;
     clearObservers();

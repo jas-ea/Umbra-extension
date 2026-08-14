@@ -31,4 +31,4 @@ npm run validate
 npm run package:extension
 ```
 
-The current upload package is `dist/umbra-2.5.0.zip`.
+The current upload package is `dist/umbra-2.5.1.zip`.

@@ -5,7 +5,7 @@
 - Publisher: Cassini Research
 - Product: Umbra
 - Summary: `Keep one block clear on busy webpages without leaving the original site.`
-- Package: `dist/umbra-2.5.0.zip`
+- Package: `dist/umbra-2.5.1.zip`
 - Listing copy: `umbra-extension/docs/STORE_LISTING.md`
 - Privacy policy: `umbra-extension/PRIVACY.md`
 
