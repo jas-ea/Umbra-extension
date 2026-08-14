@@ -1,26 +1,28 @@
 # Privacy Policy
 
-Umbra is published by Cassini Research. It does not collect, transmit, sell, or store personal browsing content on any external server.
+Umbra is published by Cassini Research. It processes webpage structure locally to select and outline a block on the current page.
 
-## What the extension uses
+## Data stored
 
-Umbra reads page structure locally in the browser to identify a likely reading container. It stores only user preferences through Chrome sync storage, such as whether the extension is enabled, visual settings, and per-site mode overrides.
+Umbra stores preferences through Chrome storage, including whether the extension is enabled, appearance settings, and per-site modes. A paused-tab identifier is stored for the current browser session and removed when the tab closes.
 
-## What Umbra does not do
+## Data not collected
 
-Umbra does not send webpage content, mouse position history, URLs, account data, or reading behavior analytics to any remote service.
+Umbra does not send webpage content, URLs, pointer history, account data, or usage analytics to Cassini Research or another service. It does not use analytics, telemetry, cloud inference, remote configuration, or remote code.
 
-Umbra does not inject ads, affiliate code, tracking pixels, or third-party scripts.
+Umbra does not inject advertising, affiliate code, tracking pixels, or third-party scripts.
 
-## Permissions rationale
+## Permissions
 
-`storage` is used to save preferences.
+`storage` saves preferences, site modes, and session-only tab pause state.
 
-`<all_urls>` is required because the overlay needs to run on the pages you browse. Processing still happens entirely on-device.
+`scripting` lets the popup restore the extension on an eligible page that was already open when Umbra was installed or updated.
+
+`<all_urls>` lets Umbra operate on websites where the user chooses to use it. Processing remains in the browser.
 
 ## Data use
 
-Umbra stores user preferences only, in Chrome sync storage, solely to provide its single purpose (a reading-focus overlay). It does not transmit, sell, or share any data, and its use of any user information adheres to the Chrome Web Store User Data Policy, including the Limited Use requirements.
+Stored preferences are used only to provide Umbra's focus behavior. Umbra does not sell or share user data. Its use of information follows the Chrome Web Store User Data Policy, including the Limited Use requirements.
 
 ## Contact
 

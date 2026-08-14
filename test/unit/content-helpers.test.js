@@ -87,6 +87,7 @@ async function loadContent(body = "<main></main>") {
 
   dom.window.eval(read("umbra-extension/defaults.js"));
   dom.window.eval(read("umbra-extension/site-profiles.js"));
+  dom.window.eval(read("umbra-extension/focus-policy.js"));
   dom.window.eval(read("umbra-extension/content.js"));
   await new Promise((resolve) => dom.window.setTimeout(resolve, 0));
   return { dom, api: dom.window.UMBRA_TEST_API };
@@ -128,6 +129,82 @@ describe("content helper behavior", () => {
     ).toBeGreaterThan(3);
   });
 
+  it("promotes a composite inbox row to its collection surface", async () => {
+    const { dom, api } = await loadContent(
+      '<div id="inbox" role="grid"><div id="row" role="row">Mail</div><div role="row">Mail</div><div role="row">Mail</div><div role="row">Mail</div></div>',
+    );
+    const inbox = dom.window.document.getElementById("inbox");
+    const row = dom.window.document.getElementById("row");
+    setRect(inbox, rect(200, 80, 700, 500));
+    for (const [index, item] of [...inbox.children].entries()) {
+      setRect(item, rect(200, 80 + index * 60, 700, 56));
+    }
+    dom.window.document.elementFromPoint = () => row;
+    api.state.siteProfile = {
+      intent: "workspace",
+      collectionSelectors: ['[role="grid"]'],
+      detailSelectors: [],
+      surfaceSelectors: ['[role="row"]'],
+      preferSelectors: ['[role="row"]'],
+      quickSelectors: ['[role="row"]'],
+      rejectSelectors: [],
+      rejectTokens: [],
+    };
+
+    const target = api.resolvedTargetFromPoint("read", { x: 300, y: 110 }, row);
+    expect(target.surface).toBe(inbox);
+    expect(target.mode).toBe("scan");
+  });
+
+  it("promotes a generic ARIA list while rejecting a navigation grid", async () => {
+    const { dom, api } = await loadContent(
+      '<nav><div id="mini" role="grid"><div id="mini-row" role="row">1</div><div role="row">2</div><div role="row">3</div><div role="row">4</div></div></nav><main><div id="tasks" role="list"><div id="task" role="listitem">A</div><div role="listitem">B</div><div role="listitem">C</div><div role="listitem">D</div></div></main>',
+    );
+    const mini = dom.window.document.getElementById("mini");
+    const miniRow = dom.window.document.getElementById("mini-row");
+    const tasks = dom.window.document.getElementById("tasks");
+    const task = dom.window.document.getElementById("task");
+    for (const collection of [mini, tasks]) {
+      setRect(collection, rect(20, 20, 500, 300));
+      for (const [index, item] of [...collection.children].entries()) {
+        setRect(item, rect(20, 20 + index * 50, 500, 44));
+      }
+    }
+    api.state.siteProfile = {
+      intent: "workspace",
+      collectionSelectors: ['[role="grid"]'],
+      surfaceSelectors: ['[role="grid"]'],
+      rejectSelectors: ["nav"],
+      rejectTokens: [],
+    };
+
+    expect(api.collectionSurfaceFrom(miniRow)).toBeNull();
+    expect(api.collectionSurfaceFrom(task)).toBe(tasks);
+  });
+
+  it("does not match site profiles on lookalike domains", async () => {
+    const { dom } = await loadContent();
+    const slack = dom.window.UMBRA_SITE_PROFILES.find(
+      (profile) => profile.id === "slack",
+    );
+    const calendar = dom.window.UMBRA_SITE_PROFILES.find(
+      (profile) => profile.id === "google-calendar",
+    );
+    const context = (host) => ({
+      host,
+      pathname: "/",
+      href: `https://${host}/`,
+      doc: dom.window.document,
+    });
+
+    expect(slack.match(context("app.slack.com"))).toBe(true);
+    expect(slack.match(context("fakeslack.com"))).toBe(false);
+    expect(calendar.match(context("calendar.google.com"))).toBe(true);
+    expect(calendar.match(context("fakecalendar.google.com.example"))).toBe(
+      false,
+    );
+  });
+
   it("scores candidates without reading layout-forcing innerText", async () => {
     const { dom, api } = await loadContent(
       '<article id="story" class="story"><p>Readable article text with enough length to score.</p></article>',
@@ -151,6 +228,24 @@ describe("content helper behavior", () => {
     expect(
       api.candidateScore(story, { x: 120, y: 120 }, "read"),
     ).toBeGreaterThan(0);
+  });
+
+  it("preserves pinned focus while a tab is hidden and restores it on return", async () => {
+    const { dom, api } = await loadContent(
+      '<article id="pinned">Pinned reading surface</article>',
+    );
+    const pinned = dom.window.document.getElementById("pinned");
+    setRect(pinned, rect(80, 90, 520, 260));
+
+    api.switchSurface(pinned, "read", { pin: true });
+    expect(api.state.visible).toBe(true);
+    api.handleVisibility(true);
+    expect(api.state.visible).toBe(false);
+    expect(api.state.activeSurface).toBe(pinned);
+    expect(api.state.pinned).toBe(true);
+    api.handleVisibility(false);
+    expect(api.state.visible).toBe(true);
+    expect(api.state.activeSurface).toBe(pinned);
   });
 
   it("rejects known chrome before expensive candidate measurements", async () => {

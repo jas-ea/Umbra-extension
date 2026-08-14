@@ -1,50 +1,44 @@
 # 01 - Positioning and Research
 
-Umbra is a small focus layer for the live web. It dims the surrounding page around the block a person is reading, while leaving the original site interactive. That is the useful distinction: the page is still the page.
+## Product statement
 
-## What The Product Is
+Umbra keeps one block clear on a busy webpage while the original site stays interactive.
 
-Umbra is not a reader view. It does not copy page text into a separate panel, delete page elements, or send page content to Cassini Research. It runs as a Manifest V3 Chrome extension and uses local browser storage for preferences.
+It is useful when the surrounding page still matters: a chat answer beside navigation and a composer, a post inside a feed, a question in a long list, or a section of technical documentation.
 
-The current release is strongest on:
+Umbra is not a reader view and does not remove page elements. It draws a visual layer over the existing page. Automatic focus waits for the pointer to rest or for scrolling to settle; the user can choose an area when automatic selection is not appropriate.
 
-- Long articles and reference pages.
-- Dense documentation pages with side navigation.
-- Developer triage pages such as issues and question lists.
-- Feed-like surfaces where the useful unit is a post, card, answer, or message.
+## Claim boundaries
 
-It should stay conservative on utility-heavy apps. Manual or Off mode is better than a spotlight that fights controls.
+Public copy can say:
 
-## Market Context
+- The original page remains interactive.
+- Page structure is processed locally.
+- Umbra sends no page content or behavior analytics to Cassini Research.
+- Per-site modes and a tab pause are available.
 
-Chrome reading mode helps people focus on text and adjust typography, but it is a reading mode surface rather than the original page. Google describes reading mode as a way to focus on text, reduce distractions, and change typeface, size, theme, spacing, and read-aloud settings.
+Public copy should not claim that Umbra understands attention, improves comprehension, increases productivity, or works on every website. Those outcomes have not been measured.
 
-Microsoft Edge Immersive Reader simplifies the page and includes Line focus, which narrows attention to one, three, or five lines inside Immersive Reader.
+## Product category
 
-Safari Distraction Control lets users hide selected distracting page items. Apple notes that it works best on items that do not regularly change and does not permanently hide ads or other frequently updating items.
+Reader modes create a separate reading surface. Element-hiding tools remove selected parts of a page. Umbra does neither: it preserves the page and dims around one selected block. That distinction should carry the listing, poster, and launch posts.
 
-Umbra should be explained beside those tools carefully:
+## Store and media decisions
 
-- Reader modes help when a user wants a separate reading surface.
-- Distraction hiding helps when a user wants to remove chosen items.
-- Umbra helps when the user wants the original site to remain intact and interactive.
+Chrome requires a 128 x 128 icon and at least one 1280 x 800 screenshot. The optional small promotional tile is 440 x 280. Chrome also recommends avoiding text in promotional images, filling the frame, and checking that the image still works at half size. The Umbra store tile follows those constraints.
 
-## Store Requirements That Shape The Kit
+The social poster is 1200 x 628. It uses a real Stack Overflow screenshot because the product is only credible when shown inside a busy page. The copy is limited to:
 
-Chrome Web Store guidance calls for clear listing text, at least one screenshot, a 128 x 128 icon, and a 440 x 280 small promotional image. Screenshots should show the current extension experience and use 1280 x 800 or 640 x 400 dimensions.
-
-This launch kit includes:
-
-- 1280 x 800 screenshots from real public websites.
-- A 512 x 512 product mark and 128-ready source mark.
-- A 440 x 280 promo image.
-- Store copy that avoids broad claims, competitor callouts, and ranking language.
+1. `Umbra`
+2. `Keep your place on busy pages.`
+3. `The page dims around one block. The original site stays interactive.`
+4. `Chrome extension by Cassini Research`
 
 ## Sources
 
-- Chrome reading mode: https://support.google.com/chrome/answer/14218344
-- Microsoft Edge Immersive Reader: https://support.microsoft.com/en-us/education/learning-accelerators/use-immersive-reader-in-microsoft-edge-1
-- Safari Distraction Control: https://support.apple.com/en-ae/120682
-- Chrome Web Store images: https://developer.chrome.com/docs/webstore/images
-- Chrome Web Store program policies: https://developer.chrome.com/docs/webstore/program-policies
-- Chrome Web Store Limited Use: https://developer.chrome.com/docs/webstore/program-policies/limited-use
+- [Chrome Web Store image guidelines](https://developer.chrome.com/docs/webstore/images)
+- [Chrome Web Store listing requirements](https://developer.chrome.com/docs/webstore/cws-dashboard-listing/)
+- [Chrome extension scripting API](https://developer.chrome.com/docs/extensions/reference/api/scripting)
+- [Chrome extension update lifecycle](https://developer.chrome.com/docs/extensions/develop/concepts/extensions-update-lifecycle)
+- [Chrome Reading mode](https://support.google.com/chrome/answer/14218344)
+- [Safari Distraction Control](https://support.apple.com/120682)

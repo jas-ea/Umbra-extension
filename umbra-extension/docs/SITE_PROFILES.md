@@ -8,15 +8,20 @@ A profile is a plain object in `site-profiles.js`.
 
 ```js
 {
-  id: 'gmail',
-  label: 'Gmail',
-  intent: 'gmail',
-  match: ({ host, pathname, href, doc }) => /mail\.google\.com$/.test(host),
-  quickSelectors: ['tr.zA', '.ii.gt'],
-  preferSelectors: ['tr.zA', '.ii.gt', '.a3s'],
-  rejectSelectors: ['[role="main"]', '[role="search"]'],
-  rejectTokens: ['sidebar', 'toolbar', 'search'],
-  fallbackSelectors: ['.ii.gt', 'tr.zA']
+  id: "gmail",
+  label: "Gmail",
+  intent: "workspace",
+  defaultMode: "auto",
+  match: ({ host }) =>
+    host === "mail.google.com" || host.endsWith(".mail.google.com"),
+  quickSelectors: ["tr.zA", ".ii.gt"],
+  preferSelectors: ["tr.zA", ".ii.gt", ".a3s"],
+  surfaceSelectors: ["tr.zA", ".ii.gt", ".a3s"],
+  collectionSelectors: ['[role="main"] [role="grid"]'],
+  detailSelectors: [".ii.gt", ".a3s"],
+  rejectSelectors: ['[role="search"]'],
+  rejectTokens: ["sidebar", "toolbar", "search"],
+  fallbackSelectors: [".ii.gt", "tr.zA"],
 }
 ```
 
@@ -26,13 +31,25 @@ A profile is a plain object in `site-profiles.js`.
 Determines whether the profile should be active.
 
 `intent`
-Controls the general scoring posture. Current values include `article`, `timeline`, `chat`, `gmail`, `comparative`, `utility`, `hybrid`, and `generic`.
+Controls the general scoring posture. Current values include `article`, `timeline`, `chat`, `workspace`, `comparative`, `utility`, `hybrid`, and `generic`.
+
+`defaultMode`
+Sets the starting behavior for the profile: `auto`, `manual`, or `off`.
 
 `quickSelectors`
 Fast path selectors used before deeper scoring.
 
 `preferSelectors`
 Selectors that should receive a boost during scoring.
+
+`surfaceSelectors`
+Selectors that identify explicit content units and protect those units from broad ancestor rejection.
+
+`collectionSelectors`
+Selectors for scan surfaces such as an inbox, calendar grid, or conversation pane. Descendants are promoted to this container during automatic focus.
+
+`detailSelectors`
+Selectors for opened or readable detail content. Detail matches take precedence over a surrounding collection.
 
 `rejectSelectors`
 Selectors that should be treated as app chrome or layout shell.
@@ -69,7 +86,7 @@ Every profile should now declare a `defaultMode`:
 - `manual`: no automatic focusing, but manual tools still work
 - `off`: Umbra disabled for that site by default
 
-This is the preferred way to handle calendars, editors, dashboards, canvases, and other utility-heavy surfaces.
+Use `manual` or `off` for canvases and editors that do not expose reliable semantic surfaces. Calendars and other composite widgets can use `auto` when the profile identifies a stable collection container.
 
 ## Comparative pages
 

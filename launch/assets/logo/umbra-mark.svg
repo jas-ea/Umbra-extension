@@ -1,21 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
   <title id="title">Umbra mark</title>
-  <desc id="desc">A soft focus ring around a small reading point.</desc>
-  <defs>
-    <radialGradient id="focus" cx="50%" cy="45%" r="60%">
-      <stop offset="0%" stop-color="#f4f2ff"/>
-      <stop offset="52%" stop-color="#d7d2ff"/>
-      <stop offset="100%" stop-color="#8ea7ff"/>
-    </radialGradient>
-    <linearGradient id="rim" x1="96" y1="64" x2="416" y2="448" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#111827"/>
-      <stop offset="54%" stop-color="#1f2937"/>
-      <stop offset="100%" stop-color="#5b6ee1"/>
-    </linearGradient>
-  </defs>
-  <rect width="512" height="512" rx="112" fill="#0b0d12"/>
-  <circle cx="256" cy="256" r="160" fill="none" stroke="url(#rim)" stroke-width="46"/>
-  <circle cx="256" cy="256" r="74" fill="url(#focus)"/>
-  <circle cx="256" cy="256" r="114" fill="none" stroke="#ffffff" stroke-opacity="0.12" stroke-width="2"/>
-  <path d="M126 256c0-72 58-130 130-130" fill="none" stroke="#ffffff" stroke-opacity="0.28" stroke-width="18" stroke-linecap="round"/>
+  <desc id="desc">Three page lines with the middle line shifted into focus.</desc>
+  <g stroke="#111214" stroke-width="12" stroke-linejoin="round">
+    <rect x="76" y="116" width="278" height="72" rx="8" fill="#f4f3ee"/>
+    <rect x="158" y="220" width="278" height="72" rx="8" fill="#bce75b"/>
+    <rect x="76" y="324" width="278" height="72" rx="8" fill="#f4f3ee"/>
+  </g>
 </svg>

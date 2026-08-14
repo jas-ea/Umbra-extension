@@ -1,24 +1,28 @@
 (() => {
   const DEFAULTS = Object.freeze({
     enabled: true,
-    dwellMs: 1200,
-    scrollIdleMs: 380,
-    overlayOpacity: 0.58,
+    dwellMs: 1000,
+    refocusDwellMs: 1450,
+    scrollIdleMs: 650,
+    overlayOpacity: 0.74,
     dimTint: "#000000",
     edgeFeather: 0,
     solidDim: false,
     focusMode: "block",
-    paddingX: 24,
-    paddingY: 20,
-    cornerRadius: 12,
-    transitionMs: 170,
-    stationaryTolerance: 10,
+    paddingX: 18,
+    paddingY: 14,
+    cornerRadius: 10,
+    transitionMs: 160,
+    stationaryTolerance: 12,
+    pointerQuietMs: 240,
     revealBuffer: 44,
     readingBandY: 0.42,
-    hideGraceMs: 45,
-    actionLockMs: 700,
-    pointerPriorityMs: 220,
-    refocusCooldownMs: 5000,
+    hideGraceMs: 90,
+    noTargetHoldMs: 1800,
+    actionLockMs: 1200,
+    interactionGraceMs: 700,
+    fullscreenExitGraceMs: 1200,
+    mediaFocusMs: 180,
     autoOnScroll: true,
     autoOnHover: true,
     showOutline: true,
@@ -31,8 +35,24 @@
     "blur" + "Px",
     "center" + "Bias",
     "ignore" + "Domains",
+    "pointer" + "PriorityMs",
+    "refocus" + "CooldownMs",
   ]);
   const MAX_SITE_OVERRIDES = 120;
+  const VISUAL_DEFAULTS_VERSION = 1;
+  const BEHAVIOR_DEFAULTS_VERSION = 1;
+  const BEHAVIOR_DEFAULT_KEYS = Object.freeze([
+    "dwellMs",
+    "refocusDwellMs",
+    "scrollIdleMs",
+    "stationaryTolerance",
+    "pointerQuietMs",
+    "noTargetHoldMs",
+    "actionLockMs",
+    "interactionGraceMs",
+    "fullscreenExitGraceMs",
+    "mediaFocusMs",
+  ]);
 
   function normalizeHost(value) {
     return String(value || "")
@@ -80,6 +100,31 @@
       ...normalizeSiteOverrides(items.siteOverrides),
       ...legacyIgnoreOverrides(items[LEGACY_STORAGE_KEYS[2]]),
     };
+    const visualDefaultsVersion = Number(items.visualDefaultsVersion);
+    if (
+      (!Number.isFinite(visualDefaultsVersion) ||
+        visualDefaultsVersion < VISUAL_DEFAULTS_VERSION) &&
+      Number(items.overlayOpacity) === 0.52
+    ) {
+      settings.overlayOpacity = DEFAULTS.overlayOpacity;
+    }
+    const behaviorDefaultsVersion = Number(items.behaviorDefaultsVersion);
+    if (
+      !Number.isFinite(behaviorDefaultsVersion) ||
+      behaviorDefaultsVersion < BEHAVIOR_DEFAULTS_VERSION
+    ) {
+      for (const key of BEHAVIOR_DEFAULT_KEYS) settings[key] = DEFAULTS[key];
+    }
+    // Keep normalized settings self-describing so a second normalization pass
+    // cannot mistake them for pre-migration storage values.
+    settings.visualDefaultsVersion = Math.max(
+      VISUAL_DEFAULTS_VERSION,
+      Number.isFinite(visualDefaultsVersion) ? visualDefaultsVersion : 0,
+    );
+    settings.behaviorDefaultsVersion = Math.max(
+      BEHAVIOR_DEFAULTS_VERSION,
+      Number.isFinite(behaviorDefaultsVersion) ? behaviorDefaultsVersion : 0,
+    );
     return settings;
   }
 
@@ -89,6 +134,27 @@
       ...legacyIgnoreOverrides(items[LEGACY_STORAGE_KEYS[2]]),
     };
     const set = {};
+    const visualDefaultsVersion = Number(items.visualDefaultsVersion);
+    if (
+      !Number.isFinite(visualDefaultsVersion) ||
+      visualDefaultsVersion < VISUAL_DEFAULTS_VERSION
+    ) {
+      set.visualDefaultsVersion = VISUAL_DEFAULTS_VERSION;
+      if (
+        !Object.hasOwn(items, "overlayOpacity") ||
+        Number(items.overlayOpacity) === 0.52
+      ) {
+        set.overlayOpacity = DEFAULTS.overlayOpacity;
+      }
+    }
+    const behaviorDefaultsVersion = Number(items.behaviorDefaultsVersion);
+    if (
+      !Number.isFinite(behaviorDefaultsVersion) ||
+      behaviorDefaultsVersion < BEHAVIOR_DEFAULTS_VERSION
+    ) {
+      set.behaviorDefaultsVersion = BEHAVIOR_DEFAULTS_VERSION;
+      for (const key of BEHAVIOR_DEFAULT_KEYS) set[key] = DEFAULTS[key];
+    }
     if (
       Object.keys(migratedOverrides).length ||
       JSON.stringify(migratedOverrides) !==

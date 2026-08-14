@@ -1,29 +1,33 @@
-# Umbra Product Pillars
+# Product Contracts
 
-## North Star
+## One job
 
-Umbra is a local-first reading spotlight for the live web. It helps people keep their place by dimming visual noise around the block they are reading, without replacing, rewriting, or sending page content anywhere.
+Umbra keeps one block clear on a busy webpage while the original site stays interactive.
 
-## P1 - Live page, never a reader view
+## Preserve the page
 
-Umbra works on the real, interactive DOM and dims around existing page content instead of moving content into a separate reader surface. It should never delete, rewrite, or reflow the page.
+Umbra draws a visual layer over the existing page. It does not copy content into a reader view, remove elements, rewrite text, or intercept normal pointer events.
 
-What this rules out: reader-mode clones, DOM simplification, destructive page cleanup, and any feature that breaks native page interaction.
+## Confirm before switching
 
-## P2 - Follow the reading, not the cursor
+The first automatic focus requires a stable dwell or a settled scroll. When the pointer moves to another block, the current cutout remains visible until the new block is confirmed. The overlay must never flash as a full-page dimmer between adjacent items.
 
-Umbra uses reading intent signals such as dwell and scroll-settle behavior so the spotlight follows what the user is actually reading. Pointer position is evidence, not the whole product.
+## Match the task scale
 
-What this rules out: cursor-only spotlight behavior, sticky highlights that ignore scroll context, and interactions that fight ordinary reading motion.
+Articles, opened messages, posts, answers, and comparable data regions can be atomic targets. Mail inboxes, calendars, grids, and conversations are scan surfaces: Umbra keeps the collection visible instead of isolating one row or cell.
 
-## P3 - Local-first and private
+Menus, submenus, popovers, dialogs, dragging, and fullscreen suspend the overlay. Editing and user-started media are explicit interaction states and outrank pointer inference.
 
-Umbra runs entirely in the browser extension package and stores preferences in browser storage. It does not use analytics, telemetry, cloud inference, remote configuration, or first-party servers.
+When automatic selection is uncertain, direct selection or no selection is better than a confident wrong result.
 
-What this rules out: network calls for product behavior, cloud processing of page content, remote code, and any privacy claim that depends on server-side trust.
+## Keep daily controls small
 
-## P4 - Honest and respectful
+The popup exposes one main action, surrounding darkness, site mode, tab pause, and Settings. The Settings page contains only choices that apply across sites. Engine timing and geometry are not user-facing settings.
 
-Every shipped control must be consumed by the production engine and must do what its label says. Umbra should respect accessibility preferences and avoid interfering with assistive technology or site controls.
+## Stay local
 
-What this rules out: fiction UI, aspirational settings, surprise keyboard interception, inaccessible animation defaults, and docs that describe unshipped behavior.
+Selection and geometry run inside the extension. Umbra has no product server and sends no page content or behavior analytics to Cassini Research.
+
+## Ship only what is true
+
+Every visible control must affect production behavior. Public copy must not claim attention detection, comprehension gains, productivity gains, accessibility outcomes, or universal site support without evidence.

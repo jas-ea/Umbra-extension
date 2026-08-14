@@ -1,6 +1,6 @@
 import { test, expect, chromium } from "@playwright/test";
 import http from "node:http";
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 
@@ -11,6 +11,7 @@ const fixtureRoot = path.join(repoRoot, "test/fixtures");
 const fastSettings = {
   enabled: true,
   dwellMs: 120,
+  refocusDwellMs: 180,
   scrollIdleMs: 80,
   overlayOpacity: 0.58,
   paddingX: 24,
@@ -18,17 +19,21 @@ const fastSettings = {
   cornerRadius: 18,
   transitionMs: 0,
   stationaryTolerance: 10,
+  pointerQuietMs: 30,
   revealBuffer: 44,
   hideGraceMs: 0,
+  noTargetHoldMs: 400,
   actionLockMs: 120,
-  pointerPriorityMs: 60,
-  refocusCooldownMs: 300,
+  interactionGraceMs: 160,
+  fullscreenExitGraceMs: 200,
+  mediaFocusMs: 50,
   autoOnScroll: true,
   autoOnHover: true,
   showOutline: true,
   siteOverrides: {},
   appAutoSuppress: false,
-  debug: false,
+  behaviorDefaultsVersion: 1,
+  debug: true,
 };
 
 function contentType(filePath) {
@@ -63,6 +68,11 @@ async function startFixtureServer() {
   return {
     origin: `http://127.0.0.1:${port}`,
     substackOrigin: `http://substack.com:${port}`,
+    chatgptOrigin: `http://chatgpt.com:${port}`,
+    xOrigin: `http://x.com:${port}`,
+    gmailOrigin: `http://mail.google.com:${port}`,
+    calendarOrigin: `http://calendar.google.com:${port}`,
+    slackOrigin: `http://app.slack.com:${port}`,
     close: () => new Promise((resolve) => server.close(resolve)),
   };
 }
@@ -71,6 +81,12 @@ async function serviceWorker(context) {
   return (
     context.serviceWorkers()[0] || (await context.waitForEvent("serviceworker"))
   );
+}
+
+async function extensionOrigin(context) {
+  const workerUrl = (await serviceWorker(context)).url();
+  const extensionId = new URL(workerUrl).hostname;
+  return `chrome-extension://${extensionId}`;
 }
 
 async function setExtensionSettings(context, overrides = {}) {
@@ -133,6 +149,8 @@ async function focusByHover(page, selector, options = {}) {
   const locator = page.locator(selector);
   await expect(locator).toBeVisible();
   const box = await locator.boundingBox();
+  await page.mouse.move(4, 4);
+  await page.waitForTimeout(24);
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await expect
     .poll(async () => {
@@ -140,6 +158,11 @@ async function focusByHover(page, selector, options = {}) {
       return shell?.visible && !shell?.preview && shell?.maskVisible;
     })
     .toBe(true);
+  if (options.expectedSurfaceId && options.context) {
+    await expect
+      .poll(async () => activeSurfaceId(options.context, page))
+      .toBe(options.expectedSurfaceId);
+  }
   if (options.waitForRect) {
     const focused = await waitForFocusedRect(page, selector, options.tolerance);
     return focused.target;
@@ -160,18 +183,42 @@ async function sendExtensionMessage(context, page, message) {
   );
 }
 
+async function extensionState(context, page) {
+  return sendExtensionMessage(context, page, { type: "UMBRA_GET_STATE" });
+}
+
+async function activeSurfaceId(context, page) {
+  return (await extensionState(context, page))?.activeSurfaceId || "";
+}
+
+async function storedTabPause(context, page) {
+  const worker = await serviceWorker(context);
+  return worker.evaluate(async (pageUrl) => {
+    const tabs = await chrome.tabs.query({});
+    const tab = tabs.find((candidate) => candidate.url === pageUrl);
+    if (!tab?.id) return false;
+    const stored = await chrome.storage.session.get("pausedTabIds");
+    return (stored.pausedTabIds || []).includes(tab.id);
+  }, page.url());
+}
+
 function expectClose(actual, expected, tolerance = 3) {
   expect(Math.abs(actual - expected)).toBeLessThanOrEqual(tolerance);
 }
 
 function rectCoversElement(shell, target, tolerance = 4) {
+  const left = Math.max(0, target.x - fastSettings.paddingX);
+  const top = Math.max(0, target.y - fastSettings.paddingY);
+  const right = Math.min(1280, target.x + target.width + fastSettings.paddingX);
+  const bottom = Math.min(
+    900,
+    target.y + target.height + fastSettings.paddingY,
+  );
   return (
-    Math.abs(shell.left - (target.x - fastSettings.paddingX)) <= tolerance &&
-    Math.abs(shell.top - (target.y - fastSettings.paddingY)) <= tolerance &&
-    Math.abs(shell.width - (target.width + fastSettings.paddingX * 2)) <=
-      tolerance &&
-    Math.abs(shell.height - (target.height + fastSettings.paddingY * 2)) <=
-      tolerance
+    Math.abs(shell.left - left) <= tolerance &&
+    Math.abs(shell.top - top) <= tolerance &&
+    Math.abs(shell.width - (right - left)) <= tolerance &&
+    Math.abs(shell.height - (bottom - top)) <= tolerance
   );
 }
 
@@ -199,25 +246,32 @@ async function waitForFocusedRect(page, selector, tolerance = 4) {
 test.describe("Umbra extension fixtures", () => {
   let server;
   let context;
+  let contextPath;
 
   test.beforeAll(async () => {
     server = await startFixtureServer();
-    context = await chromium.launchPersistentContext(
-      path.join(os.tmpdir(), `umbra-pw-${Date.now()}`),
-      {
-        headless: false,
-        args: [
-          `--disable-extensions-except=${extensionPath}`,
-          `--load-extension=${extensionPath}`,
+    contextPath = await mkdtemp(path.join(os.tmpdir(), "umbra-pw-"));
+    context = await chromium.launchPersistentContext(contextPath, {
+      headless: false,
+      args: [
+        `--disable-extensions-except=${extensionPath}`,
+        `--load-extension=${extensionPath}`,
+        [
           "--host-resolver-rules=MAP substack.com 127.0.0.1",
-        ],
-      },
-    );
+          "MAP chatgpt.com 127.0.0.1",
+          "MAP x.com 127.0.0.1",
+          "MAP mail.google.com 127.0.0.1",
+          "MAP calendar.google.com 127.0.0.1",
+          "MAP app.slack.com 127.0.0.1",
+        ].join(", "),
+      ],
+    });
   });
 
   test.afterAll(async () => {
     await context?.close();
     await server?.close();
+    if (contextPath) await rm(contextPath, { recursive: true, force: true });
   });
 
   test.beforeEach(async () => {
@@ -251,7 +305,10 @@ test.describe("Umbra extension fixtures", () => {
 
   test("targets a ChatGPT-like message inside a noisy app shell", async () => {
     const page = await context.newPage();
-    await page.goto(`${server.origin}/noisy-chat-app.html`);
+    await page.goto(`${server.chatgptOrigin}/noisy-chat-app.html`);
+    await expect
+      .poll(async () => (await extensionState(context, page))?.profile)
+      .toBe("chatgpt");
     const target = await focusByHover(page, "#assistant-message-one", {
       waitForRect: true,
     });
@@ -265,7 +322,7 @@ test.describe("Umbra extension fixtures", () => {
 
   test("switches cleanly between chat messages and ignores the sticky composer", async () => {
     const page = await context.newPage();
-    await page.goto(`${server.origin}/noisy-chat-app.html`);
+    await page.goto(`${server.chatgptOrigin}/noisy-chat-app.html`);
     const firstTarget = await focusByHover(page, "#assistant-message-one", {
       waitForRect: true,
     });
@@ -288,7 +345,10 @@ test.describe("Umbra extension fixtures", () => {
 
   test("targets an X-like timeline post instead of rails, ads, or drawers", async () => {
     const page = await context.newPage();
-    await page.goto(`${server.origin}/noisy-social-feed.html`);
+    await page.goto(`${server.xOrigin}/noisy-social-feed.html`);
+    await expect
+      .poll(async () => (await extensionState(context, page))?.profile)
+      .toBe("x-timeline");
     const target = await focusByHover(page, "#tweet-one", {
       waitForRect: true,
     });
@@ -302,7 +362,7 @@ test.describe("Umbra extension fixtures", () => {
 
   test("switches cleanly across noisy timeline posts", async () => {
     const page = await context.newPage();
-    await page.goto(`${server.origin}/noisy-social-feed.html`);
+    await page.goto(`${server.xOrigin}/noisy-social-feed.html`);
     const firstTarget = await focusByHover(page, "#tweet-one", {
       waitForRect: true,
     });
@@ -320,13 +380,402 @@ test.describe("Umbra extension fixtures", () => {
     await page.close();
   });
 
+  test("keeps a dense Gmail inbox visible as one scan surface", async () => {
+    const page = await context.newPage();
+    await page.goto(`${server.gmailOrigin}/productivity-workspace.html`);
+    await expect
+      .poll(async () => (await extensionState(context, page))?.profile)
+      .toBe("gmail");
+
+    await focusByHover(page, "#mail-row-1");
+    await expect
+      .poll(async () => activeSurfaceId(context, page))
+      .toBe("inbox-grid");
+
+    const rows = page.locator(".mail-row");
+    for (let index = 1; index < 5; index += 1) {
+      const row = await rows.nth(index).boundingBox();
+      await page.mouse.move(row.x + row.width / 2, row.y + row.height / 2);
+      await page.waitForTimeout(55);
+    }
+    expect(await activeSurfaceId(context, page)).toBe("inbox-grid");
+    await page.close();
+  });
+
+  test("keeps Calendar cells and events inside the week surface", async () => {
+    const page = await context.newPage();
+    await page.goto(`${server.calendarOrigin}/productivity-workspace.html`);
+    await expect
+      .poll(async () => (await extensionState(context, page))?.profile)
+      .toBe("google-calendar");
+
+    await focusByHover(page, "#calendar-event");
+    await expect
+      .poll(async () => activeSurfaceId(context, page))
+      .toBe("week-grid");
+
+    const miniCell = await page.locator("#mini-calendar-cell").boundingBox();
+    await page.mouse.move(
+      miniCell.x + miniCell.width / 2,
+      miniCell.y + miniCell.height / 2,
+    );
+    await page.waitForTimeout(260);
+    expect(await activeSurfaceId(context, page)).not.toBe("mini-calendar");
+    await page.close();
+  });
+
+  test("keeps Slack messages together and suspends for an open menu", async () => {
+    const page = await context.newPage();
+    await page.goto(`${server.slackOrigin}/productivity-workspace.html`);
+    await expect
+      .poll(async () => (await extensionState(context, page))?.profile)
+      .toBe("slack");
+
+    await focusByHover(page, ".message:nth-of-type(2)");
+    await expect
+      .poll(async () => activeSurfaceId(context, page))
+      .toBe("message-pane");
+
+    await page.locator("#channel-menu-button").click();
+    await expect(page.locator("#action-menu")).toBeVisible();
+    await expect
+      .poll(async () => (await shellInfo(page))?.maskVisible || false)
+      .toBe(false);
+
+    await page.getByRole("menuitem", { name: "More actions" }).click();
+    await expect(page.locator("#submenu")).toBeVisible();
+    expect((await shellInfo(page)).maskVisible).toBe(false);
+
+    await page.keyboard.press("Escape");
+    await expect(page.locator("#action-menu")).toBeHidden();
+    await expect
+      .poll(async () => {
+        const shell = await shellInfo(page);
+        return (
+          shell?.maskVisible &&
+          (await activeSurfaceId(context, page)) === "message-pane"
+        );
+      })
+      .toBe(true);
+    await page.close();
+  });
+
+  test("observes CSS-opened menus without treating tooltips as blockers", async () => {
+    const page = await context.newPage();
+    await page.goto(`${server.slackOrigin}/productivity-workspace.html`);
+    await focusByHover(page, ".message:nth-of-type(2)");
+    await expect
+      .poll(async () => activeSurfaceId(context, page))
+      .toBe("message-pane");
+
+    await page.evaluate(() => {
+      const style = document.createElement("style");
+      style.textContent =
+        ".css-menu { display: none } .css-menu.open { display: block }";
+      const tooltip = document.createElement("div");
+      tooltip.id = "hover-tooltip";
+      tooltip.role = "tooltip";
+      tooltip.textContent = "More actions";
+      Object.assign(tooltip.style, {
+        position: "fixed",
+        top: "80px",
+        right: "24px",
+      });
+      const menu = document.createElement("div");
+      menu.id = "css-menu";
+      menu.className = "menu css-menu";
+      menu.role = "menu";
+      menu.innerHTML = '<button role="menuitem">Move message</button>';
+      document.head.append(style);
+      document.body.append(tooltip, menu);
+    });
+    await page.waitForTimeout(240);
+    expect((await shellInfo(page)).maskVisible).toBe(true);
+
+    await page
+      .locator("#css-menu")
+      .evaluate((menu) => menu.classList.add("open"));
+    await expect
+      .poll(async () => (await shellInfo(page))?.maskVisible || false)
+      .toBe(false);
+    await page
+      .locator("#css-menu")
+      .evaluate((menu) => menu.classList.remove("open"));
+    await expect
+      .poll(async () => {
+        const shell = await shellInfo(page);
+        return (
+          shell?.maskVisible &&
+          (await activeSurfaceId(context, page)) === "message-pane"
+        );
+      })
+      .toBe(true);
+    await page.close();
+  });
+
+  test("promotes direct grid cells to one collection on a noisy app page", async () => {
+    const page = await context.newPage();
+    await page.goto(`${server.origin}/productivity-workspace.html`);
+    await page.evaluate(() => {
+      const grid = document.createElement("div");
+      grid.id = "direct-cell-grid";
+      grid.role = "grid";
+      grid.setAttribute("aria-label", "Available times");
+      Object.assign(grid.style, {
+        display: "grid",
+        gridTemplateColumns: "repeat(2, minmax(120px, 1fr))",
+        gap: "8px",
+        margin: "16px",
+        padding: "16px",
+      });
+      for (let index = 0; index < 6; index += 1) {
+        const cell = document.createElement("button");
+        cell.id = `direct-cell-${index}`;
+        cell.role = "gridcell";
+        cell.textContent = `Time ${index + 1}`;
+        cell.style.minHeight = "48px";
+        grid.append(cell);
+      }
+      document.querySelector(".message-pane").prepend(grid);
+    });
+
+    await focusByHover(page, "#direct-cell-2");
+    await expect
+      .poll(async () => activeSurfaceId(context, page))
+      .toBe("direct-cell-grid");
+    await page.close();
+  });
+
+  test("restores a pinned collection after a nested menu closes", async () => {
+    const page = await context.newPage();
+    await page.goto(`${server.slackOrigin}/productivity-workspace.html`);
+    await sendExtensionMessage(context, page, { type: "UMBRA_BEGIN_PICK" });
+    const message = page.locator(".message:nth-of-type(2)");
+    await message.hover();
+    await message.click();
+    await expect
+      .poll(async () => (await extensionState(context, page))?.pinned || false)
+      .toBe(true);
+    await expect
+      .poll(async () => activeSurfaceId(context, page))
+      .toBe("message-pane");
+
+    await page.locator("#channel-menu-button").click();
+    await expect(page.locator("#action-menu")).toBeVisible();
+    await expect
+      .poll(async () => (await shellInfo(page))?.maskVisible || false)
+      .toBe(false);
+    await page.keyboard.press("Escape");
+    await expect(page.locator("#action-menu")).toBeHidden();
+    await expect
+      .poll(async () => (await shellInfo(page))?.maskVisible || false)
+      .toBe(true);
+
+    await message.evaluate((element) => {
+      element.dispatchEvent(new DragEvent("dragstart", { bubbles: true }));
+    });
+    await expect
+      .poll(async () => (await shellInfo(page))?.maskVisible || false)
+      .toBe(false);
+    await message.evaluate((element) => {
+      element.dispatchEvent(new DragEvent("dragend", { bubbles: true }));
+    });
+    await expect
+      .poll(async () => (await shellInfo(page))?.maskVisible || false)
+      .toBe(true);
+
+    await message.evaluate((element) => {
+      element.addEventListener("click", () => element.requestFullscreen(), {
+        once: true,
+      });
+    });
+    await message.click();
+    await expect
+      .poll(() => page.evaluate(() => document.fullscreenElement !== null))
+      .toBe(true);
+    await expect
+      .poll(async () => (await shellInfo(page))?.maskVisible || false)
+      .toBe(false);
+    await page.evaluate(() => document.exitFullscreen());
+    await expect
+      .poll(async () => (await shellInfo(page))?.maskVisible || false)
+      .toBe(true);
+
+    expect(await activeSurfaceId(context, page)).toBe("message-pane");
+    await page.close();
+  });
+
+  test("gives user-started video stable ownership and suspends in fullscreen", async () => {
+    const page = await context.newPage();
+    await page.goto(`${server.slackOrigin}/productivity-workspace.html`);
+    const video = page.locator("#inline-video");
+
+    await video.click();
+    await video.evaluate((element) => {
+      Object.defineProperties(element, {
+        paused: { configurable: true, get: () => false },
+        ended: { configurable: true, get: () => false },
+      });
+      element.muted = false;
+      element.volume = 1;
+      element.dispatchEvent(new Event("play"));
+    });
+    await expect
+      .poll(async () => activeSurfaceId(context, page))
+      .toBe("inline-player");
+
+    await page.locator("#autoplay-video").evaluate((element) => {
+      Object.defineProperties(element, {
+        paused: { configurable: true, get: () => false },
+        ended: { configurable: true, get: () => false },
+      });
+      element.muted = true;
+      element.dispatchEvent(new Event("play"));
+    });
+    await page.waitForTimeout(140);
+    expect(await activeSurfaceId(context, page)).toBe("inline-player");
+
+    await video.evaluate((element) => {
+      element.dispatchEvent(
+        new Event("enterpictureinpicture", { bubbles: true }),
+      );
+    });
+    await expect
+      .poll(async () => (await shellInfo(page))?.maskVisible || false)
+      .toBe(false);
+    await video.evaluate((element) => {
+      element.dispatchEvent(
+        new Event("leavepictureinpicture", { bubbles: true }),
+      );
+    });
+    await expect
+      .poll(async () => activeSurfaceId(context, page))
+      .toBe("inline-player");
+    await expect
+      .poll(async () => (await shellInfo(page))?.maskVisible || false)
+      .toBe(true);
+
+    await video.evaluate((element) => {
+      element.addEventListener("click", () => element.requestFullscreen(), {
+        once: true,
+      });
+    });
+    await video.click();
+    await expect
+      .poll(() => page.evaluate(() => document.fullscreenElement?.id || ""))
+      .toBe("inline-video");
+    await expect
+      .poll(async () => (await shellInfo(page))?.maskVisible || false)
+      .toBe(false);
+
+    await page.evaluate(() => document.exitFullscreen());
+    await page.waitForTimeout(100);
+    expect((await shellInfo(page)).maskVisible).toBe(false);
+    await expect
+      .poll(async () => (await shellInfo(page))?.maskVisible || false)
+      .toBe(true);
+    await page.close();
+  });
+
+  test("does not replace an incumbent before the refocus dwell completes", async () => {
+    const page = await context.newPage();
+    await setExtensionSettings(context, {
+      dwellMs: 100,
+      refocusDwellMs: 500,
+      pointerQuietMs: 40,
+    });
+    await page.goto(`${server.chatgptOrigin}/noisy-chat-app.html`);
+    await focusByHover(page, "#assistant-message-one", { waitForRect: true });
+    const second = await page.locator("#assistant-message-two").boundingBox();
+    await page.mouse.move(
+      second.x + second.width / 2,
+      second.y + second.height / 2,
+    );
+
+    await page.waitForTimeout(350);
+    expect(await activeSurfaceId(context, page)).toBe("assistant-message-one");
+    await expect
+      .poll(async () => activeSurfaceId(context, page))
+      .toBe("assistant-message-two");
+    await page.close();
+  });
+
+  test("waits for pointer quiet after continuous low-amplitude movement", async () => {
+    const page = await context.newPage();
+    await setExtensionSettings(context, {
+      dwellMs: 220,
+      pointerQuietMs: 160,
+      stationaryTolerance: 20,
+    });
+    await page.goto(`${server.origin}/article.html`);
+    const target = await page.locator("#target-article").boundingBox();
+    const centerX = target.x + target.width / 2;
+    const centerY = target.y + target.height / 2;
+
+    for (let index = 0; index < 9; index += 1) {
+      await page.mouse.move(centerX + (index % 3), centerY + (index % 2));
+      await page.waitForTimeout(45);
+    }
+    expect((await shellInfo(page)).maskVisible).toBe(false);
+    await expect
+      .poll(async () => activeSurfaceId(context, page))
+      .toBe("target-article");
+    await page.close();
+  });
+
+  test("ignores hidden interaction layers and cancels a pending exit hide", async () => {
+    const page = await context.newPage();
+    await setExtensionSettings(context, {
+      dwellMs: 100,
+      noTargetHoldMs: 100,
+      hideGraceMs: 180,
+    });
+    await page.goto(`${server.origin}/article.html`);
+    await page.evaluate(() => {
+      const hiddenMenu = document.createElement("div");
+      hiddenMenu.setAttribute("role", "menu");
+      hiddenMenu.setAttribute("aria-hidden", "true");
+      Object.assign(hiddenMenu.style, {
+        position: "fixed",
+        right: "10px",
+        top: "10px",
+        width: "180px",
+        height: "220px",
+      });
+      document.body.append(hiddenMenu);
+    });
+    await focusByHover(page, "#target-article", {
+      context,
+      expectedSurfaceId: "target-article",
+    });
+
+    await page.mouse.move(10, 200);
+    await page.waitForTimeout(130);
+    const target = await page.locator("#target-article").boundingBox();
+    await page.mouse.move(
+      target.x + target.width / 2,
+      target.y + target.height / 2,
+    );
+    await page.waitForTimeout(220);
+    expect((await shellInfo(page)).maskVisible).toBe(true);
+    expect(await activeSurfaceId(context, page)).toBe("target-article");
+    await page.close();
+  });
+
   test("tracks an active surface inside a nested scroller", async () => {
     const page = await context.newPage();
-    await page.goto(`${server.substackOrigin}/chat-stream.html`);
+    await setExtensionSettings(context, { scrollIdleMs: 500 });
+    await page.goto(`${server.chatgptOrigin}/chat-stream.html`);
     await page.locator("#chatScroll").evaluate((node) => {
       node.scrollTop = 300;
     });
-    await focusByHover(page, "#message-one");
+    await focusByHover(page, "#message-one", {
+      context,
+      expectedSurfaceId: "message-one",
+    });
+    await expect
+      .poll(async () => activeSurfaceId(context, page))
+      .toBe("message-one");
 
     await page.locator("#chatScroll").evaluate((node) => {
       node.scrollTop += 120;
@@ -374,7 +823,6 @@ test.describe("Umbra extension fixtures", () => {
     const page = await context.newPage();
     await setExtensionSettings(context, {
       readingBandY: 0.42,
-      refocusCooldownMs: 80,
     });
     await page.goto(`${server.substackOrigin}/feed.html`);
     await page.mouse.move(24, 24);
@@ -398,7 +846,7 @@ test.describe("Umbra extension fixtures", () => {
     await page.close();
   });
 
-  test("does not let refocus cooldown delay a settled hover", async () => {
+  test("ignores the removed refocus cooldown during settings migration", async () => {
     const page = await context.newPage();
     await setExtensionSettings(context, {
       dwellMs: 120,
@@ -454,22 +902,240 @@ test.describe("Umbra extension fixtures", () => {
     await page.close();
   });
 
-  test("shows a boundary preview before hover dwell", async () => {
+  test("keeps a tab paused after the page reloads", async () => {
     const page = await context.newPage();
-    await setExtensionSettings(context, { dwellMs: 900 });
     await page.goto(`${server.origin}/article.html`);
-    const target = await page.locator("#target-article").boundingBox();
+
+    expect(
+      await sendExtensionMessage(context, page, {
+        type: "UMBRA_TOGGLE_TAB_PAUSE",
+      }),
+    ).toEqual({ pausedForTab: true });
+    await expect.poll(() => storedTabPause(context, page)).toBe(true);
+
+    await page.reload();
+    await expect
+      .poll(async () => (await extensionState(context, page))?.pausedForTab)
+      .toBe(true);
+    expect((await shellInfo(page))?.visible || false).toBe(false);
+
+    expect(
+      await sendExtensionMessage(context, page, {
+        type: "UMBRA_TOGGLE_TAB_PAUSE",
+      }),
+    ).toEqual({ pausedForTab: false });
+    await expect.poll(() => storedTabPause(context, page)).toBe(false);
+    await page.close();
+  });
+
+  test("saves surrounding darkness from the popup", async () => {
+    const popup = await context.newPage();
+    await popup.goto(`${await extensionOrigin(context)}/popup.html`);
+    const targetPage = await context.newPage();
+    await targetPage.goto(`${server.origin}/article.html`);
+    await targetPage.bringToFront();
+    await popup.reload();
+    const slider = popup.locator("#darknessSlider");
+    await expect(slider).toBeEnabled();
+    await slider.evaluate((element) => {
+      element.value = "0.82";
+      element.dispatchEvent(new Event("input", { bubbles: true }));
+      element.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+
+    await expect(popup.locator("#darknessValue")).toHaveText("82%");
+    await expect
+      .poll(async () => {
+        const worker = await serviceWorker(context);
+        return worker.evaluate(async () => {
+          const settings = await chrome.storage.sync.get([
+            "overlayOpacity",
+            "solidDim",
+          ]);
+          return settings;
+        });
+      })
+      .toEqual({ overlayOpacity: 0.82, solidDim: false });
+    await targetPage.close();
+    await popup.close();
+  });
+
+  test("keeps settings small and resets individual site choices", async () => {
+    await updateExtensionSettings(context, {
+      siteOverrides: { "x.com": "off" },
+    });
+    const page = await context.newPage();
+    await page.goto(`${await extensionOrigin(context)}/options.html`);
+
+    await expect(page.locator("input[type=number]")).toHaveCount(0);
+    await expect(page.locator("textarea")).toHaveCount(0);
+    await expect(page.locator(".site-host")).toHaveText("x.com");
+    await page
+      .getByRole("button", { name: "Use the default behavior" })
+      .click();
+
+    await expect(page.locator(".empty-state")).toHaveText(
+      "No site-specific changes",
+    );
+    await expect
+      .poll(async () => {
+        const worker = await serviceWorker(context);
+        return worker.evaluate(async () => {
+          const { siteOverrides } =
+            await chrome.storage.sync.get("siteOverrides");
+          return siteOverrides;
+        });
+      })
+      .toEqual({});
+    await page.close();
+  });
+
+  test("keeps the current cutout visible while confirming a new block", async () => {
+    const page = await context.newPage();
+    await setExtensionSettings(context, { dwellMs: 900, transitionMs: 180 });
+    await page.goto(`${server.chatgptOrigin}/noisy-chat-app.html`);
+    const first = await focusByHover(page, "#assistant-message-one", {
+      waitForRect: true,
+    });
+    const second = await page.locator("#assistant-message-two").boundingBox();
     await page.mouse.move(
+      second.x + second.width / 2,
+      second.y + second.height / 2,
+    );
+    await page.waitForTimeout(80);
+
+    const duringHandoff = await shellInfo(page);
+    expect(duringHandoff.visible).toBe(true);
+    expect(duringHandoff.maskVisible).toBe(true);
+    expect(duringHandoff.maskPath).toContain("A18 18");
+    expectClose(duringHandoff.left, first.x - fastSettings.paddingX, 5);
+
+    await expect
+      .poll(async () => {
+        const shell = await shellInfo(page);
+        return rectCoversElement(shell, second, 5);
+      })
+      .toBe(true);
+    await page.close();
+  });
+
+  test("requires residence on one candidate before first focus", async () => {
+    const page = await context.newPage();
+    await setExtensionSettings(context, { dwellMs: 300 });
+    await page.goto(`${server.chatgptOrigin}/noisy-chat-app.html`);
+    const target = await page.locator("#assistant-message-one").boundingBox();
+    const x = target.x + target.width / 2;
+
+    for (let offset = 40; offset <= 88; offset += 6) {
+      await page.mouse.move(x, target.y + offset);
+      await page.waitForTimeout(70);
+    }
+
+    expect((await shellInfo(page))?.visible || false).toBe(false);
+    await expect
+      .poll(async () => (await shellInfo(page))?.visible || false)
+      .toBe(true);
+    await page.close();
+  });
+
+  test("yields a clicked control lock when the pointer moves to another message", async () => {
+    const page = await context.newPage();
+    await setExtensionSettings(context, { dwellMs: 180, actionLockMs: 1200 });
+    await page.goto(`${server.chatgptOrigin}/noisy-chat-app.html`);
+    await focusByHover(page, "#assistant-message-one", { waitForRect: true });
+    await page
+      .locator("#assistant-message-one .toolbar button")
+      .first()
+      .click();
+
+    const second = await page.locator("#assistant-message-two").boundingBox();
+    await page.mouse.move(
+      second.x + second.width / 2,
+      second.y + second.height / 2,
+    );
+
+    await expect
+      .poll(async () => rectCoversElement(await shellInfo(page), second, 5))
+      .toBe(true);
+    await page.close();
+  });
+
+  test("choose area pins the selected message", async () => {
+    const page = await context.newPage();
+    await page.goto(`${server.chatgptOrigin}/noisy-chat-app.html`);
+    await expect
+      .poll(async () => (await extensionState(context, page))?.profile)
+      .toBe("chatgpt");
+
+    expect(
+      await sendExtensionMessage(context, page, { type: "UMBRA_BEGIN_PICK" }),
+    ).toEqual({ ok: true });
+    const target = await page.locator("#assistant-message-two").boundingBox();
+    await page.mouse.click(
       target.x + target.width / 2,
       target.y + target.height / 2,
     );
 
     await expect
-      .poll(async () => {
-        const shell = await shellInfo(page);
-        return shell?.visible && shell?.preview && shell?.boxShadow === "none";
-      })
+      .poll(async () => (await extensionState(context, page))?.pinned)
       .toBe(true);
+    expectRectCoversElement(await shellInfo(page), target, 5);
+    await page.mouse.move(12, 12);
+    await page.waitForTimeout(240);
+    expectRectCoversElement(await shellInfo(page), target, 5);
+    await page.close();
+  });
+
+  test("choose area prefers the explicit block under the pointer", async () => {
+    const page = await context.newPage();
+    await page.goto(`${server.origin}/article.html`);
+    expect(
+      await sendExtensionMessage(context, page, { type: "UMBRA_BEGIN_PICK" }),
+    ).toEqual({ ok: true });
+
+    const target = await page.locator("#target-article p").nth(1).boundingBox();
+    await page.mouse.move(
+      target.x + target.width / 2,
+      target.y + target.height / 2,
+    );
+    await page.waitForTimeout(80);
+    await page.mouse.click(
+      target.x + target.width / 2,
+      target.y + target.height / 2,
+    );
+
+    await expect
+      .poll(async () => (await extensionState(context, page))?.pinned)
+      .toBe(true);
+    const shell = await shellInfo(page);
+    expectClose(shell.left, target.x - fastSettings.paddingX, 5);
+    expectClose(shell.top, target.y - fastSettings.paddingY, 5);
+    expectClose(shell.width, target.width + fastSettings.paddingX * 2, 5);
+    expectClose(shell.height, target.height + fastSettings.paddingY * 2, 5);
+    await page.close();
+  });
+
+  test("keeps the mask and outline aligned during element switching", async () => {
+    const page = await context.newPage();
+    await setExtensionSettings(context, { dwellMs: 120, transitionMs: 320 });
+    await page.goto(`${server.chatgptOrigin}/noisy-chat-app.html`);
+    await focusByHover(page, "#assistant-message-one", { waitForRect: true });
+    const second = await page.locator("#assistant-message-two").boundingBox();
+    await page.mouse.move(
+      second.x + second.width / 2,
+      second.y + second.height / 2,
+    );
+    await page.waitForTimeout(180);
+
+    const shell = await shellInfo(page);
+    const innerStart = shell.maskPath.match(/ZM([\d.-]+) ([\d.-]+)/);
+    expect(innerStart).not.toBeNull();
+    expectClose(Number(innerStart[1]), shell.left, 1);
+    expectClose(
+      Number(innerStart[2]),
+      shell.top + Number.parseFloat(shell.borderRadius),
+      1,
+    );
     await page.close();
   });
 

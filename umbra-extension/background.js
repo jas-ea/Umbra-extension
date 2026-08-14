@@ -20,6 +20,28 @@ chrome.runtime.onStartup?.addListener(() => {
 });
 
 const badgeForState = globalThis.UMBRA_BADGE_FOR_STATE;
+const PAUSED_TABS_KEY = "pausedTabIds";
+
+async function pausedTabIds() {
+  const session = chrome.storage.session;
+  if (!session) return [];
+  const stored = await session.get(PAUSED_TABS_KEY);
+  return Array.isArray(stored[PAUSED_TABS_KEY])
+    ? stored[PAUSED_TABS_KEY].filter(Number.isInteger)
+    : [];
+}
+
+async function setTabPaused(tabId, paused) {
+  if (!chrome.storage.session || typeof tabId !== "number") return;
+  const ids = new Set(await pausedTabIds());
+  if (paused) ids.add(tabId);
+  else ids.delete(tabId);
+  await chrome.storage.session.set({ [PAUSED_TABS_KEY]: [...ids] });
+}
+
+async function isTabPaused(tabId) {
+  return typeof tabId === "number" && (await pausedTabIds()).includes(tabId);
+}
 
 // Per-tab toolbar badge so Umbra's current state (off / paused / manual) is
 // visible at a glance without opening the popup. Pillar P4 (honest & respectful):
@@ -57,10 +79,22 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
 chrome.storage.onChanged.addListener((_changes, areaName) => {
   if (areaName === "sync") refreshActiveTabBadge();
 });
-chrome.runtime.onMessage.addListener((message, sender) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message?.type === "UMBRA_GET_TAB_PAUSE" && sender.tab?.id) {
+    isTabPaused(sender.tab.id)
+      .then((pausedForTab) => sendResponse({ pausedForTab }))
+      .catch(() => sendResponse({ pausedForTab: false }));
+    return true;
+  }
   if (message?.type === "UMBRA_STATE_PUSH" && sender.tab?.id) {
+    setTabPaused(sender.tab.id, !!message.state?.pausedForTab).catch(() => {});
     paintBadge(sender.tab.id, message.state || null);
   }
+  return false;
+});
+
+chrome.tabs.onRemoved.addListener((tabId) => {
+  setTabPaused(tabId, false).catch(() => {});
 });
 
 async function withActiveTab(fn) {

@@ -1,0 +1,587 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Umbra dense productivity workspace</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        font:
+          14px/1.35 system-ui,
+          sans-serif;
+        color: #dfe3ea;
+        background: #101216;
+      }
+      button,
+      input {
+        font: inherit;
+        color: inherit;
+      }
+      button {
+        border: 1px solid #3d424d;
+        background: #252932;
+        min-height: 32px;
+        padding: 0 10px;
+      }
+      .app {
+        display: grid;
+        grid-template-columns: 228px minmax(0, 1fr) 292px;
+        grid-template-rows: 56px minmax(0, 1fr);
+        height: 100vh;
+      }
+      .topbar {
+        grid-column: 1 / -1;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 16px;
+        border-bottom: 1px solid #30343d;
+        background: #181b21;
+      }
+      .topbar strong {
+        font-size: 17px;
+        margin-right: 18px;
+      }
+      .search {
+        width: min(520px, 48vw);
+        border: 1px solid #3c424e;
+        background: #22262e;
+        padding: 9px 12px;
+      }
+      .sidebar,
+      .context {
+        overflow: auto;
+        padding: 14px 12px;
+        background: #171a20;
+      }
+      .sidebar {
+        border-right: 1px solid #30343d;
+      }
+      .context {
+        border-left: 1px solid #30343d;
+      }
+      .nav-item {
+        width: 100%;
+        display: flex;
+        justify-content: space-between;
+        margin: 2px 0;
+        border-color: transparent;
+        background: transparent;
+        text-align: left;
+      }
+      .nav-item.active {
+        background: #303541;
+      }
+      .mini-calendar {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 3px;
+        margin-top: 18px;
+      }
+      .mini-calendar [role="row"] {
+        display: contents;
+      }
+      .mini-calendar [role="gridcell"] {
+        padding: 5px 2px;
+        text-align: center;
+        color: #9ea5b2;
+      }
+      main {
+        min-width: 0;
+        overflow: hidden;
+        background: #111318;
+      }
+      .workspace {
+        height: 100%;
+        display: none;
+        grid-template-rows: 48px minmax(0, 1fr);
+      }
+      .workspace.active {
+        display: grid;
+      }
+      .toolbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        border-bottom: 1px solid #30343d;
+        background: #1a1d23;
+      }
+      .mail-grid,
+      .calendar-grid,
+      .message-pane {
+        min-height: 0;
+        overflow: auto;
+      }
+      .mail-row {
+        display: grid;
+        grid-template-columns: 34px 34px 150px minmax(220px, 1fr) 72px;
+        align-items: center;
+        min-height: 48px;
+        padding: 0 12px;
+        border-bottom: 1px solid #292d35;
+      }
+      .mail-row:hover,
+      .mail-row[aria-selected="true"] {
+        background: #252a33;
+      }
+      .mail-row button {
+        min-height: 28px;
+        padding: 0;
+        border: 0;
+        background: transparent;
+      }
+      .subject {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .calendar-grid {
+        display: grid;
+        grid-template-columns: 64px repeat(5, minmax(110px, 1fr));
+        grid-template-rows: 38px repeat(10, 72px);
+      }
+      .day,
+      .time,
+      .cell {
+        border-right: 1px solid #2c3038;
+        border-bottom: 1px solid #2c3038;
+        padding: 8px;
+      }
+      .day,
+      .time {
+        color: #9ea5b2;
+        background: #181b21;
+      }
+      .event {
+        width: 100%;
+        min-height: 44px;
+        border-color: #5873a7;
+        background: #283a5b;
+        text-align: left;
+      }
+      .message-pane {
+        padding: 14px 18px 90px;
+      }
+      .message {
+        position: relative;
+        display: grid;
+        grid-template-columns: 38px 1fr;
+        gap: 10px;
+        padding: 10px 8px;
+        border-top: 1px solid transparent;
+      }
+      .message:hover {
+        background: #20242b;
+      }
+      .avatar {
+        width: 34px;
+        height: 34px;
+        background: #4a5262;
+      }
+      .message-actions {
+        position: absolute;
+        right: 8px;
+        top: 4px;
+        display: none;
+      }
+      .message:hover .message-actions {
+        display: flex;
+      }
+      .composer {
+        position: absolute;
+        left: 246px;
+        right: 310px;
+        bottom: 14px;
+        min-height: 58px;
+        padding: 12px;
+        border: 1px solid #454b57;
+        background: #20242b;
+      }
+      .menu {
+        position: fixed;
+        z-index: 5;
+        right: 314px;
+        top: 142px;
+        width: 190px;
+        padding: 6px;
+        border: 1px solid #4b5260;
+        background: #242831;
+        box-shadow: 0 12px 32px #0009;
+      }
+      .menu[hidden] {
+        display: none;
+      }
+      .menu button {
+        display: block;
+        width: 100%;
+        border: 0;
+        background: transparent;
+        text-align: left;
+      }
+      .submenu {
+        right: 118px;
+        top: 212px;
+      }
+      .context-card {
+        margin-bottom: 14px;
+        padding: 12px;
+        border: 1px solid #343944;
+        background: #1c2027;
+      }
+      .player-container {
+        margin-bottom: 14px;
+        padding: 8px;
+        border: 1px solid #343944;
+        background: #090a0d;
+      }
+      .player-container video {
+        display: block;
+        width: 100%;
+        aspect-ratio: 16 / 9;
+        background: #050608;
+      }
+      body[data-app="mail"] .mail-workspace,
+      body[data-app="calendar"] .calendar-workspace,
+      body[data-app="slack"] .slack-workspace {
+        display: grid;
+      }
+      body:not([data-app="slack"]) .composer {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <header class="topbar">
+        <strong id="product-name">Workspace</strong>
+        <input
+          class="search"
+          role="searchbox"
+          aria-label="Search"
+          placeholder="Search messages, events, and people"
+        />
+        <button
+          aria-haspopup="menu"
+          aria-controls="action-menu"
+          id="top-menu-button"
+        >
+          More
+        </button>
+      </header>
+      <nav class="sidebar" aria-label="Primary">
+        <button class="nav-item active">Inbox <span>42</span></button>
+        <button class="nav-item">Starred <span>8</span></button>
+        <button class="nav-item">Projects <span>16</span></button>
+        <button class="nav-item">Research <span>23</span></button>
+        <button class="nav-item">Archive</button>
+        <div
+          class="mini-calendar"
+          id="mini-calendar"
+          role="grid"
+          aria-label="Mini calendar"
+        >
+          <div role="row">
+            <span role="gridcell">11</span><span role="gridcell">12</span
+            ><span role="gridcell">13</span
+            ><span role="gridcell" id="mini-calendar-cell">14</span>
+          </div>
+          <div role="row">
+            <span role="gridcell">15</span><span role="gridcell">16</span
+            ><span role="gridcell">17</span><span role="gridcell">18</span>
+          </div>
+          <div role="row">
+            <span role="gridcell">19</span><span role="gridcell">20</span
+            ><span role="gridcell">21</span><span role="gridcell">22</span>
+          </div>
+          <div role="row">
+            <span role="gridcell">23</span><span role="gridcell">24</span
+            ><span role="gridcell">25</span><span role="gridcell">26</span>
+          </div>
+        </div>
+      </nav>
+      <main role="main">
+        <section class="workspace mail-workspace">
+          <div class="toolbar" role="toolbar">
+            <button>Select</button><button>Refresh</button
+            ><button>Archive</button><button>Filter</button>
+          </div>
+          <div
+            id="inbox-grid"
+            class="mail-grid F cf zt"
+            role="grid"
+            aria-label="Inbox messages"
+          >
+            <div class="mail-row zA" role="row" id="mail-row-1">
+              <button aria-label="Select message">□</button
+              ><button aria-label="Star message">☆</button
+              ><strong>Design</strong
+              ><span class="subject"
+                >Review focus behavior for dense application views</span
+              ><time>10:14</time>
+            </div>
+            <div class="mail-row zA" role="row">
+              <button aria-label="Select message">□</button
+              ><button aria-label="Star message">☆</button
+              ><strong>Research</strong
+              ><span class="subject"
+                >Interaction model notes and browser test results</span
+              ><time>09:42</time>
+            </div>
+            <div class="mail-row zA" role="row">
+              <button aria-label="Select message">□</button
+              ><button aria-label="Star message">☆</button
+              ><strong>Release</strong
+              ><span class="subject"
+                >Store submission checklist and screenshots</span
+              ><time>08:31</time>
+            </div>
+            <div class="mail-row zA" role="row">
+              <button aria-label="Select message">□</button
+              ><button aria-label="Star message">☆</button
+              ><strong>Operations</strong
+              ><span class="subject"
+                >Weekly production review and outstanding items</span
+              ><time>Wed</time>
+            </div>
+            <div class="mail-row zA" role="row">
+              <button aria-label="Select message">□</button
+              ><button aria-label="Star message">☆</button
+              ><strong>Cassini</strong
+              ><span class="subject"
+                >Editorial pass on the launch announcement</span
+              ><time>Tue</time>
+            </div>
+            <div class="mail-row zA" role="row">
+              <button aria-label="Select message">□</button
+              ><button aria-label="Star message">☆</button
+              ><strong>Finance</strong
+              ><span class="subject"
+                >Vendor invoice review and approval queue</span
+              ><time>Mon</time>
+            </div>
+          </div>
+        </section>
+        <section class="workspace calendar-workspace">
+          <div class="toolbar" role="toolbar">
+            <button>Today</button><button>Previous</button><button>Next</button
+            ><strong>August</strong><button>Week</button>
+          </div>
+          <div
+            id="week-grid"
+            class="calendar-grid"
+            role="grid"
+            aria-label="Week calendar"
+          >
+            <div class="day"></div>
+            <div class="day">Monday</div>
+            <div class="day">Tuesday</div>
+            <div class="day">Wednesday</div>
+            <div class="day">Thursday</div>
+            <div class="day">Friday</div>
+            <div class="time">09:00</div>
+            <div class="cell" role="gridcell">
+              <button class="event" id="calendar-event" aria-haspopup="menu">
+                Research review
+              </button>
+            </div>
+            <div class="cell" role="gridcell"></div>
+            <div class="cell" role="gridcell"></div>
+            <div class="cell" role="gridcell"></div>
+            <div class="cell" role="gridcell"></div>
+            <div class="time">10:00</div>
+            <div class="cell" role="gridcell"></div>
+            <div class="cell" role="gridcell">
+              <button class="event">Design critique</button>
+            </div>
+            <div class="cell" role="gridcell"></div>
+            <div class="cell" role="gridcell"></div>
+            <div class="cell" role="gridcell"></div>
+            <div class="time">11:00</div>
+            <div class="cell" role="gridcell"></div>
+            <div class="cell" role="gridcell"></div>
+            <div class="cell" role="gridcell">
+              <button class="event">Product sync</button>
+            </div>
+            <div class="cell" role="gridcell"></div>
+            <div class="cell" role="gridcell"></div>
+            <div class="time">12:00</div>
+            <div class="cell" role="gridcell"></div>
+            <div class="cell" role="gridcell"></div>
+            <div class="cell" role="gridcell"></div>
+            <div class="cell" role="gridcell"></div>
+            <div class="cell" role="gridcell"></div>
+          </div>
+        </section>
+        <section class="workspace slack-workspace">
+          <div class="toolbar" role="toolbar">
+            <strong># product</strong><button>Members</button
+            ><button>Canvas</button
+            ><button
+              aria-haspopup="menu"
+              aria-controls="action-menu"
+              id="channel-menu-button"
+            >
+              Channel actions
+            </button>
+          </div>
+          <div
+            id="message-pane"
+            class="message-pane"
+            data-qa="message_pane"
+            role="list"
+            aria-label="Conversation"
+          >
+            <article
+              class="message"
+              role="listitem"
+              data-qa="message_container"
+            >
+              <div class="avatar"></div>
+              <div>
+                <strong>Maya</strong>
+                <p>
+                  The inbox should remain one visible surface while people scan
+                  rows.
+                </p>
+              </div>
+            </article>
+            <article
+              class="message"
+              role="listitem"
+              data-qa="message_container"
+            >
+              <div class="avatar"></div>
+              <div>
+                <strong>Arun</strong>
+                <p>
+                  Menus and reaction controls should never become accidental
+                  reading targets.
+                </p>
+              </div>
+              <div class="message-actions">
+                <button
+                  aria-haspopup="menu"
+                  aria-controls="action-menu"
+                  id="message-menu-button"
+                >
+                  Actions
+                </button>
+              </div>
+            </article>
+            <article
+              class="message"
+              role="listitem"
+              data-qa="message_container"
+            >
+              <div class="avatar"></div>
+              <div>
+                <strong>Leah</strong>
+                <p>
+                  The current cutout must stay stable until a challenger has
+                  been confirmed.
+                </p>
+              </div>
+            </article>
+            <article
+              class="message"
+              role="listitem"
+              data-qa="message_container"
+            >
+              <div class="avatar"></div>
+              <div>
+                <strong>Noah</strong>
+                <p>
+                  Keyboard movement inside composite widgets belongs to the same
+                  task surface.
+                </p>
+              </div>
+            </article>
+          </div>
+          <div
+            class="composer"
+            contenteditable="true"
+            role="textbox"
+            aria-label="Message composer"
+          ></div>
+        </section>
+      </main>
+      <aside class="context">
+        <div class="player-container" id="inline-player">
+          <video id="inline-video" aria-label="Inline video"></video>
+        </div>
+        <div class="player-container" id="autoplay-player">
+          <video id="autoplay-video" aria-label="Muted autoplay video"></video>
+        </div>
+        <div class="context-card">
+          <strong>People</strong>
+          <p>4 active collaborators</p>
+          <button>View all</button>
+        </div>
+        <div class="context-card">
+          <strong>Files</strong>
+          <p>12 recently updated</p>
+          <button>Browse</button>
+        </div>
+        <div class="context-card">
+          <strong>Activity</strong>
+          <p>18 updates today</p>
+          <button>Open activity</button>
+        </div>
+      </aside>
+    </div>
+    <div class="menu" role="menu" id="action-menu" hidden>
+      <button role="menuitem">Open details</button>
+      <button role="menuitem">Move</button>
+      <button role="menuitem" aria-haspopup="menu" aria-controls="submenu">
+        More actions
+      </button>
+    </div>
+    <div class="menu submenu" role="menu" id="submenu" hidden>
+      <button role="menuitem">Mark unread</button>
+      <button role="menuitem">Copy link</button>
+    </div>
+    <script>
+      const host = location.hostname;
+      document.body.dataset.app = host.startsWith("mail.")
+        ? "mail"
+        : host.startsWith("calendar.")
+          ? "calendar"
+          : "slack";
+      document.getElementById("product-name").textContent =
+        document.body.dataset.app === "mail"
+          ? "Mail"
+          : document.body.dataset.app === "calendar"
+            ? "Calendar"
+            : "Slack";
+      for (const trigger of document.querySelectorAll(
+        '[aria-haspopup="menu"]',
+      )) {
+        trigger.addEventListener("click", () => {
+          const menu = document.getElementById(
+            trigger.getAttribute("aria-controls"),
+          );
+          if (!menu) return;
+          menu.hidden = !menu.hidden;
+          trigger.setAttribute("aria-expanded", String(!menu.hidden));
+        });
+      }
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") {
+          for (const menu of document.querySelectorAll('[role="menu"]'))
+            menu.hidden = true;
+          for (const trigger of document.querySelectorAll(
+            '[aria-expanded="true"]',
+          ))
+            trigger.setAttribute("aria-expanded", "false");
+        }
+      });
+    </script>
+  </body>
+</html>

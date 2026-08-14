@@ -1,28 +1,9 @@
-const FIELDS = [
-  "enabled",
-  "dwellMs",
-  "scrollIdleMs",
-  "overlayOpacity",
-  "dimTint",
-  "edgeFeather",
-  "solidDim",
-  "focusMode",
-  "paddingX",
-  "paddingY",
-  "cornerRadius",
-  "transitionMs",
-  "stationaryTolerance",
-  "revealBuffer",
-  "readingBandY",
-  "autoOnScroll",
-  "autoOnHover",
-  "showOutline",
-  "debug",
-];
-
+const FIELDS = ["showOutline"];
 const settingsDefaults = globalThis.UMBRA_DEFAULTS;
 const normalizeSettings = globalThis.UMBRA_NORMALIZE_SETTINGS;
 const $ = (id) => document.getElementById(id);
+
+let currentSettings = null;
 
 function storageSet(items) {
   return new Promise((resolve, reject) => {
@@ -34,9 +15,9 @@ function storageSet(items) {
   });
 }
 
-function storageRemove(keys) {
+function storageClear() {
   return new Promise((resolve, reject) => {
-    chrome.storage.sync.remove(keys, () => {
+    chrome.storage.sync.clear(() => {
       const error = chrome.runtime.lastError;
       if (error) reject(new Error(error.message));
       else resolve();
@@ -44,81 +25,120 @@ function storageRemove(keys) {
   });
 }
 
-function formatSiteOverrides(overrides = {}) {
-  return Object.entries(overrides)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([host, mode]) => `${host}=${mode}`)
-    .join("\n");
-}
-
-function parseSiteOverrides(value) {
-  const overrides = {};
-  for (const rawLine of String(value || "").split("\n")) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith("#")) continue;
-    const [rawHost, rawMode = "off"] = line
-      .split("=")
-      .map((part) => part.trim());
-    const host = globalThis.UMBRA_NORMALIZE_HOST(rawHost);
-    if (host && ["manual", "off"].includes(rawMode)) overrides[host] = rawMode;
-  }
-  return overrides;
-}
-
-function setStatus(text) {
+function setStatus(text, tone = "saved") {
   $("status").textContent = text;
+  $("status").dataset.tone = tone;
   clearTimeout(window.__statusTimer);
   window.__statusTimer = setTimeout(() => {
     $("status").textContent = "";
+    delete $("status").dataset.tone;
   }, 1800);
 }
 
-function fillForm(data) {
-  for (const key of FIELDS) {
-    const el = $(key);
-    if (!el) continue;
-    if (el.type === "checkbox") el.checked = !!data[key];
-    else el.value = data[key];
-  }
-  $("siteOverrides").value = formatSiteOverrides(data.siteOverrides);
+function modeLabel(mode) {
+  return mode === "manual" ? "On request" : "Off";
 }
 
-function readForm() {
-  const out = {};
-  for (const key of FIELDS) {
-    const el = $(key);
-    if (!el) continue;
-    if (el.type === "checkbox") out[key] = el.checked;
-    else if (el.type === "number" || el.type === "range")
-      out[key] = Number(el.value);
-    else out[key] = el.value;
+function renderSites(overrides = {}) {
+  const entries = Object.entries(overrides).sort(([a], [b]) =>
+    a.localeCompare(b),
+  );
+  $("siteCount").textContent = entries.length ? String(entries.length) : "";
+  $("siteOverrides").replaceChildren();
+
+  if (!entries.length) {
+    const empty = document.createElement("p");
+    empty.className = "empty-state";
+    empty.textContent = "No site-specific changes";
+    $("siteOverrides").append(empty);
+    return;
   }
-  out.siteOverrides = parseSiteOverrides($("siteOverrides").value);
-  return out;
+
+  for (const [host, mode] of entries) {
+    const row = document.createElement("div");
+    row.className = "site-row";
+
+    const site = document.createElement("span");
+    site.className = "site-host";
+    site.textContent = host;
+
+    const state = document.createElement("span");
+    state.className = "site-mode";
+    state.textContent = modeLabel(mode);
+
+    const reset = document.createElement("button");
+    reset.type = "button";
+    reset.className = "reset-site";
+    reset.dataset.host = host;
+    reset.textContent = "Use default";
+    reset.setAttribute("aria-label", `Use the default behavior on ${host}`);
+
+    row.append(site, state, reset);
+    $("siteOverrides").append(row);
+  }
+}
+
+function fillForm(data) {
+  currentSettings = data;
+  $("automaticFocus").checked = !!(data.autoOnHover || data.autoOnScroll);
+  for (const key of FIELDS) $(key).checked = !!data[key];
+  renderSites(data.siteOverrides);
+}
+
+async function save(items) {
+  await storageSet(items);
+  currentSettings = normalizeSettings({ ...currentSettings, ...items });
+  setStatus("Saved");
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
-  const data = normalizeSettings(await chrome.storage.sync.get(null));
-  fillForm(data);
+  fillForm(normalizeSettings(await chrome.storage.sync.get(null)));
 
-  $("save").addEventListener("click", async () => {
+  $("automaticFocus").addEventListener("change", async () => {
+    const enabled = $("automaticFocus").checked;
     try {
-      await storageRemove(globalThis.UMBRA_LEGACY_STORAGE_KEYS);
-      await storageSet(readForm());
-      setStatus("Saved");
+      await save({ autoOnHover: enabled, autoOnScroll: enabled });
     } catch (error) {
-      setStatus(error.message || "Save failed");
+      fillForm(currentSettings);
+      setStatus(error.message || "Save failed", "error");
     }
   });
 
-  $("reset").addEventListener("click", async () => {
+  $("showOutline").addEventListener("change", async () => {
     try {
-      fillForm(settingsDefaults);
-      await storageRemove(globalThis.UMBRA_LEGACY_STORAGE_KEYS);
-      await storageSet(settingsDefaults);
-      setStatus("Reset to defaults");
+      await save({ showOutline: $("showOutline").checked });
     } catch (error) {
-      setStatus(error.message || "Reset failed");
+      fillForm(currentSettings);
+      setStatus(error.message || "Save failed", "error");
+    }
+  });
+
+  $("siteOverrides").addEventListener("click", async (event) => {
+    const button = event.target.closest("button[data-host]");
+    if (!button) return;
+    const siteOverrides = { ...(currentSettings.siteOverrides || {}) };
+    delete siteOverrides[button.dataset.host];
+    try {
+      await save({ siteOverrides });
+      renderSites(siteOverrides);
+    } catch (error) {
+      setStatus(error.message || "Save failed", "error");
+    }
+  });
+
+  $("shortcuts").addEventListener("click", () => {
+    chrome.tabs.create({ url: "chrome://extensions/shortcuts" });
+  });
+
+  $("reset").addEventListener("click", async () => {
+    if (!confirm("Restore all Umbra settings to their defaults?")) return;
+    try {
+      await storageClear();
+      await storageSet(settingsDefaults);
+      fillForm(settingsDefaults);
+      setStatus("Defaults restored");
+    } catch (error) {
+      setStatus(error.message || "Reset failed", "error");
     }
   });
 });

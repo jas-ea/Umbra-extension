@@ -1,37 +1,46 @@
-# Umbra Architecture
+# Architecture
 
-Umbra has three core stages.
+Umbra has five runtime stages.
 
-## 1. Intent gating
+## 1. Confirm an input
 
-The extension should never focus on page load alone. It waits for real user intent:
+Automatic focus starts only after the pointer settles on one surface or scrolling stops. The first focus waits 1 second; a new challenger waits 1.45 seconds. Moving across candidates resets that clock. Choose an area bypasses inference.
 
-- hover dwell
-- scroll then stop
-- manual pin/focus actions
+## 2. Classify the task surface
 
-## 2. Candidate selection
+The engine classifies the pointer context as an atomic reading surface, collection, interaction surface, or media surface. Composite grids, mail lists, calendars, and message panes resolve to their enclosing collection. Open messages, articles, posts, and answers can resolve to an atomic surface.
 
-The engine gathers candidate ancestors, scores them, rejects chrome-like shells, then expands the winning node upward just enough to preserve context.
+Menus, popovers, dialogs, dragging, and fullscreen suspend automatic focus. They do not become reading targets. Pinned and manually chosen surfaces remain the incumbent while the overlay is hidden, then return after the interaction closes.
 
-## 3. Overlay rendering
+## 3. Select a candidate
 
-The chosen rectangle is rendered as a single unified spotlight shell inside a shadow DOM host to reduce CSS collisions.
+The engine collects nearby ancestors, rejects utility context, scores readable surfaces, and expands only when the child is too narrow to stand alone. Known sites contribute selectors and rejection rules through `site-profiles.js`.
 
-The overlay is visual only: the host is `aria-hidden`, does not trap focus, and respects reduced-motion, forced-colors, and contrast media features.
+`focus-policy.js` owns the incumbent/challenger state. The incumbent stays visible until the same challenger completes the required dwell. Passive DOM changes may refresh geometry but never choose a new surface.
 
-## Why site profiles exist
+## 4. Compute visible geometry
 
-Some products are not well represented by generic heuristics. Mail clients, timelines, editors, and docs tools often need narrow handling. Site profiles let Umbra improve incrementally without destabilizing the global engine.
+`rectForElement` adds configured padding, clips the rectangle against ancestor scrollports and the viewport, and records which edges were clipped. Corners created by clipping are square; exposed corners use the configured radius.
 
-## Site modes
+## 5. Render one shape
 
-Each site profile can declare a `defaultMode` of `auto`, `manual`, or `off`. This lets the repo encode first-principles defaults for different product surfaces. Reading surfaces should usually be `auto`. Hybrid workspaces should often be `manual`. Pure utility apps such as calendars or canvases should usually be `off`.
+The SVG mask and outline use the same interpolated rectangle on every animation frame. The overlay lives in an `aria-hidden` shadow host with `pointer-events: none`.
 
-## Targeting posture
+Reduced motion removes geometry animation. Forced colors removes dimming and uses a system-color boundary. Playing video receives focus only when it is visible and either audible or recently activated by the user. Ownership belongs to that video rather than a page-wide media timer. Fullscreen suspends the overlay. Picture-in-picture releases page ownership and can restore the same video when it returns.
 
-The engine derives its targeting posture from `intent`, not from a separate selection-model setting. Reading intents favor articles, messages, posts, and cards; comparative intents favor table-level containers; utility intents default to Manual or Off so Umbra does not fight app controls.
+## State ownership
 
-## Settings schema
+- `defaults.js`: settings schema and defaults
+- `background.js`: session tab pause and toolbar badge
+- `content.js`: page state, candidate selection, geometry, and rendering
+- `focus-policy.js`: deterministic focus handoff state
+- `site-profiles.js`: site-specific matching and selectors
+- `popup.js`: state display and user commands
 
-`defaults.js` is the authoritative settings source. Popup and Options controls must map to settings that the content engine reads; the contract test fails if a settings control is added without a production consumer.
+Settings live in Chrome sync storage. Paused tab identifiers live in Chrome session storage and are removed when their tabs close.
+
+## Extension lifecycle
+
+Content scripts mount at `document_idle`. The popup can inject the runtime files into an eligible tab when an already-open page predates installation or update. Injection is version guarded, and the popup retries state reads while the asynchronous mount finishes.
+
+Same-document navigation refreshes the active profile. Back-forward cache page hide/show events suspend and restore the runtime without losing the page lifecycle.

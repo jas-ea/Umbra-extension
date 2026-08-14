@@ -1,6 +1,12 @@
 const normalizeSettings = globalThis.UMBRA_NORMALIZE_SETTINGS;
 const $ = (id) => document.getElementById(id);
 
+let popupTab = null;
+let popupSettings = null;
+let popupState = null;
+let popupHostname = "Current page";
+let darknessSaveTimer = null;
+
 function storageSet(items) {
   return new Promise((resolve, reject) => {
     chrome.storage.sync.set(items, () => {
@@ -9,6 +15,10 @@ function storageSet(items) {
       else resolve();
     });
   });
+}
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function getActiveTab() {
@@ -40,7 +50,12 @@ async function injectUmbra(tab) {
   try {
     await chrome.scripting.executeScript({
       target: { tabId: tab.id },
-      files: ["defaults.js", "site-profiles.js", "content.js"],
+      files: [
+        "defaults.js",
+        "site-profiles.js",
+        "focus-policy.js",
+        "content.js",
+      ],
     });
     return true;
   } catch (_) {
@@ -48,23 +63,32 @@ async function injectUmbra(tab) {
   }
 }
 
-async function sendToTab(message, options = {}) {
-  const tab = options.tab || (await getActiveTab());
+async function sendOnce(tab, message) {
   if (!tab?.id) return null;
   try {
     return await chrome.tabs.sendMessage(tab.id, message);
   } catch (_) {
-    if (options.inject !== false && (await injectUmbra(tab))) {
-      try {
-        return await chrome.tabs.sendMessage(tab.id, message);
-      } catch (_) {}
-    }
     return null;
   }
 }
 
+async function sendToTab(message, options = {}) {
+  const tab = options.tab || (await getActiveTab());
+  let response = await sendOnce(tab, message);
+  if (response !== null) return response;
+  if (options.inject === false || !(await injectUmbra(tab))) return null;
+
+  for (const delay of [35, 80, 160, 260]) {
+    await wait(delay);
+    response = await sendOnce(tab, message);
+    if (response !== null) return response;
+  }
+  return null;
+}
+
 async function setSiteMode(hostname, mode) {
   const host = normalizeHost(hostname);
+  if (!host || host === "Current page") return;
   const settings = normalizeSettings(await chrome.storage.sync.get(null));
   const overrides = { ...(settings.siteOverrides || {}) };
   if (!mode || mode === "auto") delete overrides[host];
@@ -73,146 +97,194 @@ async function setSiteMode(hostname, mode) {
     -(globalThis.UMBRA_MAX_SITE_OVERRIDES || 120),
   );
   await storageSet({ siteOverrides: Object.fromEntries(entries) });
-  return mode;
 }
 
-function setBadgeTone(kind) {
-  const siteState = $("siteState");
-  siteState.classList.remove("warning", "info");
-  if (kind) siteState.classList.add(kind);
+function currentMode() {
+  return (
+    popupState?.siteMode ||
+    popupSettings?.siteOverrides?.[normalizeHost(popupHostname)] ||
+    "auto"
+  );
 }
 
-function paintActionAvailability(state) {
-  const reason = state?.autoBlockedReason;
-  const canUsePageActions =
-    !!state &&
-    !state.pausedForTab &&
-    !["disabled", "site-off", "modal-open"].includes(reason);
-  $("focusNow").disabled = !canUsePageActions;
-  $("pinNow").disabled = !canUsePageActions;
-  $("pauseTab").disabled =
-    !state || reason === "disabled" || reason === "site-off";
+function setStatus(text, tone) {
+  $("siteState").textContent = text;
+  $("statusDot").className = `status-dot ${tone || ""}`.trim();
 }
 
-function paintSiteState(state, tab) {
-  paintActionAvailability(state);
-  setBadgeTone(null);
-  if (!state) {
-    $("siteState").textContent = canInjectInto(tab)
-      ? "Starting"
-      : "Unavailable here";
-    setBadgeTone("warning");
-    return;
-  }
-  const reason = state.autoBlockedReason;
-  if (state.pausedForTab) {
-    $("siteState").textContent = "Paused";
-    setBadgeTone("info");
-    return;
-  }
-  if (reason === "disabled") {
-    $("siteState").textContent = "Disabled";
-    setBadgeTone("warning");
-    return;
-  }
-  if (reason === "site-off") {
-    $("siteState").textContent = "Off here";
-    setBadgeTone("warning");
-    return;
-  }
-  if (reason === "site-manual") {
-    $("siteState").textContent = "Manual";
-    setBadgeTone("info");
-    return;
-  }
-  if (reason === "utility-page") {
-    $("siteState").textContent = "Manual suggested";
-    setBadgeTone("info");
-    return;
-  }
-  if (reason === "modal-open") {
-    $("siteState").textContent = "Modal open";
-    setBadgeTone("info");
-    return;
-  }
-  $("siteState").textContent = "Active";
+function setPrimary(label, action, disabled = false) {
+  $("primaryAction").textContent = label;
+  $("primaryAction").dataset.action = action || "";
+  $("primaryAction").disabled = disabled;
 }
 
-function paintSiteMode(mode) {
-  const label = mode === "off" ? "Off" : mode === "manual" ? "Manual" : "Auto";
-  $("siteModeText").textContent = label;
-  $("siteModeBadge").textContent = label;
-  ["auto", "manual", "off"].forEach((key) => {
-    const btn = $(`siteMode${key.charAt(0).toUpperCase()}${key.slice(1)}`);
-    btn.classList.toggle("active-mode", key === mode);
-  });
+function paintPopup() {
+  const restricted = !canInjectInto(popupTab);
+  const mode = currentMode();
+  const enabled = !!popupSettings?.enabled;
+
+  $("hostname").textContent = popupHostname;
+  $("enabledToggle").checked = enabled;
+  const darkness = Math.min(
+    0.9,
+    Math.max(0.45, Number(popupSettings?.overlayOpacity) || 0.74),
+  );
+  $("darknessSlider").value = String(darkness);
+  $("darknessValue").textContent = `${Math.round(darkness * 100)}%`;
+  $("darknessSlider").disabled = restricted || !enabled;
+  $("siteModeSelect").value = mode;
+  $("siteModeSelect").disabled = restricted;
+  $("pauseTab").disabled = restricted || !enabled || mode === "off";
+  $("pauseTab").textContent = popupState?.pausedForTab
+    ? "Resume tab"
+    : "Pause tab";
+
+  if (restricted) {
+    setStatus("Umbra can't run on this page", "off");
+    setPrimary("Unavailable here", "", true);
+    return;
+  }
+  if (!popupState) {
+    setStatus("Umbra couldn't start here", "off");
+    setPrimary("Try again", "retry");
+    return;
+  }
+  if (!enabled) {
+    setStatus("Umbra is off", "off");
+    setPrimary("Umbra is off", "", true);
+    return;
+  }
+  if (mode === "off") {
+    setStatus("Off on this site", "off");
+    setPrimary("Turn on here", "turn-on");
+    return;
+  }
+  if (popupState.pausedForTab) {
+    setStatus("Paused on this tab", "paused");
+    setPrimary("Resume", "resume");
+    return;
+  }
+  if (popupState.pinned) {
+    setStatus("Area selected", "active");
+    setPrimary("Clear focus", "clear");
+    return;
+  }
+  if (mode === "manual") {
+    setStatus("On request for this site", "active");
+  } else {
+    setStatus("Automatic on this site", "active");
+  }
+  setPrimary("Choose an area", "choose");
+}
+
+async function refreshPopup({ inject = true } = {}) {
+  popupSettings = normalizeSettings(await chrome.storage.sync.get(null));
+  popupState = await sendToTab(
+    { type: "UMBRA_GET_STATE" },
+    { tab: popupTab, inject },
+  );
+  popupHostname = popupState?.hostname || tabHostname(popupTab);
+  paintPopup();
+}
+
+async function togglePause() {
+  const response = await sendToTab(
+    { type: "UMBRA_TOGGLE_TAB_PAUSE" },
+    { tab: popupTab },
+  );
+  if (!response) {
+    popupState = null;
+  } else {
+    popupState = { ...popupState, pausedForTab: !!response.pausedForTab };
+  }
+  paintPopup();
+}
+
+async function runPrimaryAction() {
+  const action = $("primaryAction").dataset.action;
+  if (action === "retry") {
+    setPrimary("Getting ready", "", true);
+    await refreshPopup({ inject: true });
+    return;
+  }
+  if (action === "resume") {
+    await togglePause();
+    return;
+  }
+  if (action === "turn-on") {
+    await setSiteMode(popupHostname, "auto");
+    popupState = { ...popupState, siteMode: "auto", autoBlockedReason: null };
+    await refreshPopup({ inject: false });
+    return;
+  }
+  if (action === "clear") {
+    const response = await sendToTab(
+      { type: "UMBRA_CLEAR_FOCUS" },
+      { tab: popupTab },
+    );
+    if (response?.ok) popupState = { ...popupState, pinned: false };
+    paintPopup();
+    return;
+  }
+  if (action === "choose") {
+    const response = await sendToTab(
+      { type: "UMBRA_BEGIN_PICK" },
+      { tab: popupTab },
+    );
+    if (response?.ok) window.close();
+    else await refreshPopup({ inject: false });
+  }
 }
 
 async function initPopup() {
-  const settings = normalizeSettings(await chrome.storage.sync.get(null));
-  const tab = await getActiveTab();
-  const state = await sendToTab({ type: "UMBRA_GET_STATE" }, { tab });
-  const hostname = state?.hostname || tabHostname(tab);
-  const currentSiteMode =
-    state?.siteMode ||
-    (settings.siteOverrides || {})[normalizeHost(hostname)] ||
-    "auto";
-
-  $("hostname").textContent = hostname;
-  $("enabledToggle").checked = !!settings.enabled;
-  $("pauseTab").textContent = state?.pausedForTab ? "Resume tab" : "Pause tab";
-  paintSiteState(state, tab);
-  paintSiteMode(currentSiteMode);
+  popupTab = await getActiveTab();
+  popupHostname = tabHostname(popupTab);
+  await refreshPopup();
 
   $("enabledToggle").addEventListener("change", async () => {
-    await storageSet({ enabled: $("enabledToggle").checked });
-    const nextState = await sendToTab({ type: "UMBRA_GET_STATE" }, { tab });
-    paintSiteState(nextState, tab);
+    const enabled = $("enabledToggle").checked;
+    await storageSet({ enabled });
+    popupSettings = { ...popupSettings, enabled };
+    await refreshPopup({ inject: false });
   });
 
-  $("siteModeAuto").addEventListener("click", async () => {
-    await setSiteMode(hostname, "auto");
-    paintSiteMode("auto");
-    paintSiteState(await sendToTab({ type: "UMBRA_GET_STATE" }, { tab }), tab);
+  const saveDarkness = async () => {
+    clearTimeout(darknessSaveTimer);
+    const overlayOpacity = Number($("darknessSlider").value);
+    await storageSet({ overlayOpacity, solidDim: false });
+    popupSettings = { ...popupSettings, overlayOpacity, solidDim: false };
+  };
+
+  $("darknessSlider").addEventListener("input", () => {
+    const value = Number($("darknessSlider").value);
+    $("darknessValue").textContent = `${Math.round(value * 100)}%`;
+    clearTimeout(darknessSaveTimer);
+    darknessSaveTimer = setTimeout(() => {
+      saveDarkness().catch(() => refreshPopup({ inject: false }));
+    }, 140);
   });
-  $("siteModeManual").addEventListener("click", async () => {
-    await setSiteMode(hostname, "manual");
-    paintSiteMode("manual");
-    paintSiteState({ autoBlockedReason: "site-manual" }, tab);
-  });
-  $("siteModeOff").addEventListener("click", async () => {
-    await setSiteMode(hostname, "off");
-    paintSiteMode("off");
-    paintSiteState({ autoBlockedReason: "site-off" }, tab);
+  $("darknessSlider").addEventListener("change", () => {
+    saveDarkness().catch(() => refreshPopup({ inject: false }));
   });
 
-  $("focusNow").addEventListener("click", async () => {
-    const response = await sendToTab({ type: "UMBRA_FOCUS_NOW" }, { tab });
-    if (response) window.close();
-    else paintSiteState(null, tab);
+  $("siteModeSelect").addEventListener("change", async () => {
+    const mode = $("siteModeSelect").value;
+    await setSiteMode(popupHostname, mode);
+    popupState = {
+      ...popupState,
+      siteMode: mode,
+      autoBlockedReason:
+        mode === "off" ? "site-off" : mode === "manual" ? "site-manual" : null,
+    };
+    paintPopup();
   });
 
-  $("pinNow").addEventListener("click", async () => {
-    const response = await sendToTab({ type: "UMBRA_PIN_NOW" }, { tab });
-    if (response) window.close();
-    else paintSiteState(null, tab);
+  $("primaryAction").addEventListener("click", () => {
+    runPrimaryAction().catch(() => refreshPopup({ inject: false }));
   });
-
-  $("pauseTab").addEventListener("click", async () => {
-    const response = await sendToTab(
-      { type: "UMBRA_TOGGLE_TAB_PAUSE" },
-      { tab },
-    );
-    if (!response) {
-      paintSiteState(null, tab);
-      return;
-    }
-    $("pauseTab").textContent = response.pausedForTab
-      ? "Resume tab"
-      : "Pause tab";
-    paintSiteState({ ...state, pausedForTab: !!response.pausedForTab }, tab);
+  $("pauseTab").addEventListener("click", () => {
+    togglePause().catch(() => refreshPopup({ inject: false }));
   });
-
   $("openOptions").addEventListener("click", () =>
     chrome.runtime.openOptionsPage(),
   );
@@ -220,8 +292,8 @@ async function initPopup() {
 
 document.addEventListener("DOMContentLoaded", () => {
   initPopup().catch(() => {
-    paintActionAvailability(null);
-    $("siteState").textContent = "Unavailable here";
-    setBadgeTone("warning");
+    popupSettings = normalizeSettings({ enabled: true });
+    popupState = null;
+    paintPopup();
   });
 });

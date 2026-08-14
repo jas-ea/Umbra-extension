@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Umbra",
-  "version": "2.2.2",
-  "description": "A pointer-first focus overlay that softly dims the web while preserving reading, comparison, and creation flows.",
+  "version": "2.5.0",
+  "description": "Keeps one block clear on busy webpages while the original site stays interactive.",
   "homepage_url": "https://github.com/jas-ea/Umbra-extension",
   "permissions": ["scripting", "storage"],
   "host_permissions": ["<all_urls>"],
@@ -38,13 +38,18 @@
       "suggested_key": {
         "default": "Alt+Shift+F"
       },
-      "description": "Focus the current reading block immediately"
+      "description": "Focus the current page block immediately"
     }
   },
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["defaults.js", "site-profiles.js", "content.js"],
+      "js": [
+        "defaults.js",
+        "site-profiles.js",
+        "focus-policy.js",
+        "content.js"
+      ],
       "run_at": "document_idle"
     }
   ]

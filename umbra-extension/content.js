@@ -1,5 +1,5 @@
 (() => {
-  const RUNTIME_VERSION = "2.2.2";
+  const RUNTIME_VERSION = "2.5.0";
   const previousRuntime = globalThis.UMBRA_RUNTIME;
   if (previousRuntime?.version === RUNTIME_VERSION) return;
   if (previousRuntime?.teardown) {
@@ -13,6 +13,7 @@
 
   const settingsDefaults = globalThis.UMBRA_DEFAULTS;
   const normalizeSettings = globalThis.UMBRA_NORMALIZE_SETTINGS;
+  const focusCoordinator = globalThis.UMBRA_CREATE_FOCUS_COORDINATOR();
 
   const INTERACTIVE_SELECTOR = [
     "button",
@@ -26,8 +27,13 @@
     '[role="tab"]',
     '[role="link"]',
     '[role="menuitem"]',
+    '[role="option"]',
+    '[role="treeitem"]',
+    '[role="gridcell"]',
+    '[role="row"]',
     '[role="checkbox"]',
     '[role="switch"]',
+    "[aria-haspopup]",
     '[contenteditable="true"]',
     '[contenteditable="plaintext-only"]',
   ].join(",");
@@ -55,11 +61,34 @@
     ".entry-content",
   ].join(",");
 
+  const TRANSIENT_INTERACTION_SELECTOR = [
+    "dialog[open]",
+    '[aria-modal="true"]',
+    '[role="dialog"]',
+    '[role="alertdialog"]',
+    '[role="menu"]',
+    '[role="listbox"]',
+  ].join(",");
+
+  const COMPOSITE_COLLECTION_SELECTOR = [
+    '[role="grid"]',
+    '[role="treegrid"]',
+    '[role="list"]',
+    '[role="listbox"]',
+    '[role="tree"]',
+    "table",
+    'table[role="grid"]',
+  ].join(",");
+
+  const MEDIA_SELECTOR = "video";
+
   const state = {
     settings: { ...settingsDefaults },
     siteProfile: null,
     pausedForTab: false,
     pinned: false,
+    pickMode: false,
+    pickSurface: null,
     activeSurface: null,
     activeRect: null,
     activeMode: null,
@@ -69,17 +98,27 @@
     lastScrollAt: 0,
     lastInteractionAt: 0,
     lastKeyAt: 0,
-    lastClickAt: 0,
     hasUserInteracted: false,
     hoverTimer: null,
-    previewTimer: null,
+    hoverHint: null,
+    hoverMode: null,
+    hoverAnchorX: 0,
+    hoverAnchorY: 0,
     scrollTimer: null,
+    lastScrollContainer: null,
+    exitTimer: null,
     hideTimer: null,
     transitionTimer: null,
     actionLockEl: null,
     actionLockMode: null,
     actionUntil: 0,
-    nextAutoAcquireAt: 0,
+    interactionUntil: 0,
+    lastAcceptedAt: 0,
+    dragging: false,
+    fullscreenSuspended: !!document.fullscreenElement,
+    activeMedia: null,
+    pictureInPictureMedia: null,
+    mediaActivatedAt: new WeakMap(),
     overlayHost: null,
     overlayShadow: null,
     mask: null,
@@ -88,7 +127,11 @@
     visible: false,
     resizeObserver: null,
     mutationObserver: null,
+    pageObserver: null,
+    interactionCheckTimer: null,
     rafId: 0,
+    motionRafId: 0,
+    renderedRect: null,
     mutationRefreshTimer: null,
     routePollId: null,
     routeCheckTimer: null,
@@ -213,7 +256,14 @@
   function isUtilityLikePage() {
     const intent = state.siteProfile?.intent || "generic";
     if (
-      ["article", "timeline", "chat", "gmail", "comparative"].includes(intent)
+      [
+        "article",
+        "timeline",
+        "chat",
+        "gmail",
+        "workspace",
+        "comparative",
+      ].includes(intent)
     )
       return false;
     if (intent === "utility") return true;
@@ -242,9 +292,47 @@
     }
   }
 
+  function transientInteractionFrom(node) {
+    if (!node?.closest) return null;
+    const surface = node.closest(TRANSIENT_INTERACTION_SELECTOR);
+    if (!surface || !isVisible(surface)) return null;
+    if (surface.matches?.('[role="listbox"]')) {
+      const position = getComputedStyle(surface).position;
+      if (position !== "fixed" && position !== "absolute") return null;
+    }
+    return surface;
+  }
+
+  function visibleTransientInteraction() {
+    const active = transientInteractionFrom(document.activeElement);
+    if (active) return active;
+    try {
+      const popover = document.querySelector(":popover-open");
+      if (popover && isVisible(popover)) return popover;
+    } catch (_) {}
+    for (const surface of document.querySelectorAll(
+      TRANSIENT_INTERACTION_SELECTOR,
+    )) {
+      if (!isVisible(surface)) continue;
+      const style = getComputedStyle(surface);
+      if (
+        surface.matches?.('dialog[open], [aria-modal="true"]') ||
+        style.position === "fixed" ||
+        style.position === "absolute"
+      ) {
+        return surface;
+      }
+    }
+    return null;
+  }
+
   function autoBlockedReason() {
     if (!state.settings.enabled) return "disabled";
     if (state.pausedForTab) return "paused";
+    if (state.fullscreenSuspended || document.fullscreenElement)
+      return "fullscreen";
+    if (state.dragging || nowTs() < state.interactionUntil)
+      return "interaction";
     if (topLayerModalOpen()) return "modal-open";
     const mode = currentSiteMode();
     if (mode === "off") return "site-off";
@@ -304,19 +392,13 @@
         border-radius: var(--umbra-radius, 12px);
         border: 1px solid var(--umbra-outline, rgba(255,255,255,0.10));
         box-shadow: 0 0 var(--umbra-edge-feather, 0px) rgba(var(--umbra-dim-rgb, 0,0,0), var(--umbra-opacity,0.58));
-        transition:
-          left var(--umbra-transition,170ms) ease,
-          top var(--umbra-transition,170ms) ease,
-          width var(--umbra-transition,170ms) ease,
-          height var(--umbra-transition,170ms) ease,
-          opacity 90ms ease;
+        transition: opacity 90ms ease;
         will-change: left, top, width, height, opacity;
       }
       .shell.visible { opacity: 1; }
-      .shell.preview {
-        opacity: 1;
-        box-shadow: none;
-        border-color: rgba(255,255,255,0.34);
+      .shell.choosing {
+        border-color: rgba(255,255,255,0.72);
+        border-width: 2px;
       }
       @media (prefers-reduced-motion: reduce) {
         .shell {
@@ -420,16 +502,29 @@
       return `${outer}M${left} ${top}H${right}V${bottom}H${left}Z`;
     }
 
+    const topLeft = rect.clippedTop || rect.clippedLeft ? 0 : radius;
+    const topRight = rect.clippedTop || rect.clippedRight ? 0 : radius;
+    const bottomRight = rect.clippedBottom || rect.clippedRight ? 0 : radius;
+    const bottomLeft = rect.clippedBottom || rect.clippedLeft ? 0 : radius;
+
     return [
       outer,
-      `M${left} ${top + radius}`,
-      `A${radius} ${radius} 0 0 1 ${left + radius} ${top}`,
-      `H${right - radius}`,
-      `A${radius} ${radius} 0 0 1 ${right} ${top + radius}`,
-      `V${bottom - radius}`,
-      `A${radius} ${radius} 0 0 1 ${right - radius} ${bottom}`,
-      `H${left + radius}`,
-      `A${radius} ${radius} 0 0 1 ${left} ${bottom - radius}`,
+      `M${left} ${top + topLeft}`,
+      topLeft
+        ? `A${topLeft} ${topLeft} 0 0 1 ${left + topLeft} ${top}`
+        : `L${left} ${top}`,
+      `H${right - topRight}`,
+      topRight
+        ? `A${topRight} ${topRight} 0 0 1 ${right} ${top + topRight}`
+        : `L${right} ${top}`,
+      `V${bottom - bottomRight}`,
+      bottomRight
+        ? `A${bottomRight} ${bottomRight} 0 0 1 ${right - bottomRight} ${bottom}`
+        : `L${right} ${bottom}`,
+      `H${left + bottomLeft}`,
+      bottomLeft
+        ? `A${bottomLeft} ${bottomLeft} 0 0 1 ${left} ${bottom - bottomLeft}`
+        : `L${left} ${bottom}`,
       "Z",
     ].join("");
   }
@@ -448,9 +543,15 @@
     state.mask.classList.remove("visible");
   }
 
-  function clearPreview() {
-    if (state.shell && !state.visible)
-      state.shell.classList.remove("preview", "visible");
+  function clearExitTimer() {
+    if (!state.exitTimer) return;
+    clearTimeout(state.exitTimer);
+    state.exitTimer = null;
+  }
+
+  function cancelSpotlightMotion() {
+    cancelAnimationFrame(state.motionRafId);
+    state.motionRafId = 0;
   }
 
   function clearHideTimer() {
@@ -460,56 +561,109 @@
     }
   }
 
-  function hideOverlay(immediate = false) {
+  function hideOverlay(immediate = false, { preserveSurface = false } = {}) {
     clearHideTimer();
+    clearExitTimer();
     if (!state.shell) return;
     if (immediate) {
-      state.shell.classList.remove("visible", "preview");
+      cancelSpotlightMotion();
+      state.shell.classList.remove("visible");
       hideMask();
       state.visible = false;
       state.activeRect = null;
-      if (!state.pinned) state.activeSurface = null;
+      state.renderedRect = null;
+      if (!state.pinned && !preserveSurface) {
+        state.activeSurface = null;
+        state.activeMode = null;
+        focusCoordinator.clear();
+      }
       return;
     }
     state.hideTimer = setTimeout(() => {
-      state.shell.classList.remove("visible", "preview");
+      cancelSpotlightMotion();
+      state.shell.classList.remove("visible");
       hideMask();
       state.visible = false;
       state.activeRect = null;
-      if (!state.pinned) state.activeSurface = null;
+      state.renderedRect = null;
+      if (!state.pinned && !preserveSurface) {
+        state.activeSurface = null;
+        state.activeMode = null;
+        focusCoordinator.clear();
+      }
     }, state.settings.hideGraceMs || 45);
   }
 
-  function setShellRect(rect) {
+  function renderSpotlightRect(rect) {
+    setMask(rect, true);
+    state.shell.style.left = `${Math.round(rect.left)}px`;
+    state.shell.style.top = `${Math.round(rect.top)}px`;
+    state.shell.style.width = `${Math.max(0, Math.round(rect.width))}px`;
+    state.shell.style.height = `${Math.max(0, Math.round(rect.height))}px`;
+    const radius = Math.max(0, Number(state.settings.cornerRadius) || 0);
+    state.shell.style.borderRadius = [
+      rect.clippedTop || rect.clippedLeft ? 0 : radius,
+      rect.clippedTop || rect.clippedRight ? 0 : radius,
+      rect.clippedBottom || rect.clippedRight ? 0 : radius,
+      rect.clippedBottom || rect.clippedLeft ? 0 : radius,
+    ]
+      .map((value) => `${value}px`)
+      .join(" ");
+    state.renderedRect = { ...rect };
+  }
+
+  function prefersReducedMotion() {
+    return !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  }
+
+  function animateSpotlightTo(rect) {
+    const from = state.renderedRect;
+    const duration = Math.max(0, Number(state.settings.transitionMs) || 0);
+    cancelSpotlightMotion();
+    if (!from || !duration || prefersReducedMotion()) {
+      renderSpotlightRect(rect);
+      return;
+    }
+
+    const startedAt = performance.now();
+    const tick = (timestamp) => {
+      const progress = clamp((timestamp - startedAt) / duration, 0, 1);
+      const eased = 1 - (1 - progress) ** 3;
+      const next = {};
+      for (const key of ["left", "top", "right", "bottom", "width", "height"]) {
+        next[key] = from[key] + (rect[key] - from[key]) * eased;
+      }
+      next.clippedTop = rect.clippedTop;
+      next.clippedRight = rect.clippedRight;
+      next.clippedBottom = rect.clippedBottom;
+      next.clippedLeft = rect.clippedLeft;
+      renderSpotlightRect(next);
+      if (progress < 1) state.motionRafId = requestAnimationFrame(tick);
+      else state.motionRafId = 0;
+    };
+    state.motionRafId = requestAnimationFrame(tick);
+  }
+
+  function setShellRect(rect, { animate = false } = {}) {
     ensureOverlay();
     if (topLayerModalOpen()) {
-      hideOverlay(true);
+      hideOverlay(true, { preserveSurface: true });
       return;
     }
     if (!rect) {
       hideOverlay(true);
       return;
     }
+    clearHideTimer();
+    clearExitTimer();
     state.activeRect = rect;
-    state.shell.classList.remove("preview");
-    setMask(rect, true);
-    state.shell.style.left = `${Math.round(rect.left)}px`;
-    state.shell.style.top = `${Math.round(rect.top)}px`;
-    state.shell.style.width = `${Math.max(0, Math.round(rect.width))}px`;
-    state.shell.style.height = `${Math.max(0, Math.round(rect.height))}px`;
+    if (animate) animateSpotlightTo(rect);
+    else {
+      cancelSpotlightMotion();
+      renderSpotlightRect(rect);
+    }
     state.shell.classList.add("visible");
     state.visible = true;
-  }
-
-  function setPreviewRect(rect) {
-    ensureOverlay();
-    if (!rect || state.visible || state.pinned) return;
-    hideMask();
-    state.shell.classList.add("preview", "visible");
-    state.shell.style.left = `${Math.round(rect.left)}px`;
-    state.shell.style.top = `${Math.round(rect.top)}px`;
-    state.shell.style.width = `${Math.max(0, Math.round(rect.width))}px`;
-    state.shell.style.height = `${Math.max(0, Math.round(rect.height))}px`;
   }
 
   function rectForElement(el) {
@@ -523,13 +677,52 @@
       r.top >= window.innerHeight
     )
       return null;
-    const left = r.left - state.settings.paddingX;
-    const top = r.top - state.settings.paddingY;
-    const right = r.right + state.settings.paddingX;
-    const bottom = r.bottom + state.settings.paddingY;
+    let left = r.left - state.settings.paddingX;
+    let top = r.top - state.settings.paddingY;
+    let right = r.right + state.settings.paddingX;
+    let bottom = r.bottom + state.settings.paddingY;
+    const padded = { left, top, right, bottom };
+    let ancestor = el.parentElement;
+    while (
+      ancestor &&
+      ancestor !== document.body &&
+      ancestor !== document.documentElement
+    ) {
+      const style = getComputedStyle(ancestor);
+      const clipsX = /^(auto|scroll|hidden|clip)$/.test(style.overflowX);
+      const clipsY = /^(auto|scroll|hidden|clip)$/.test(style.overflowY);
+      if (clipsX || clipsY) {
+        const clip = ancestor.getBoundingClientRect();
+        const clipLeft = clip.left + ancestor.clientLeft;
+        const clipTop = clip.top + ancestor.clientTop;
+        const clipRight = clipLeft + ancestor.clientWidth;
+        const clipBottom = clipTop + ancestor.clientHeight;
+        if (clipsX) {
+          left = Math.max(left, clipLeft);
+          right = Math.min(right, clipRight);
+        }
+        if (clipsY) {
+          top = Math.max(top, clipTop);
+          bottom = Math.min(bottom, clipBottom);
+        }
+      }
+      ancestor = ancestor.parentElement;
+    }
+    left = clamp(left, 0, window.innerWidth);
+    top = clamp(top, 0, window.innerHeight);
+    right = clamp(right, 0, window.innerWidth);
+    bottom = clamp(bottom, 0, window.innerHeight);
+    const clippedTop = top > padded.top + 0.5;
+    const clippedRight = right < padded.right - 0.5;
+    const clippedBottom = bottom < padded.bottom - 0.5;
+    const clippedLeft = left > padded.left + 0.5;
+    left = Math.round(left);
+    top = Math.round(top);
+    right = Math.round(right);
+    bottom = Math.round(bottom);
     const width = right - left;
     const height = bottom - top;
-    if (r.width < 40 || r.height < 28) return null;
+    if (r.width < 40 || r.height < 28 || width < 40 || height < 28) return null;
     if (state.settings.focusMode === "band") {
       const bandHeight = Math.min(
         height,
@@ -548,9 +741,24 @@
         height: bandHeight,
         right,
         bottom: bandTop + bandHeight,
+        clippedTop: false,
+        clippedRight,
+        clippedBottom: false,
+        clippedLeft,
       };
     }
-    return { left, top, width, height, right, bottom };
+    return {
+      left,
+      top,
+      width,
+      height,
+      right,
+      bottom,
+      clippedTop,
+      clippedRight,
+      clippedBottom,
+      clippedLeft,
+    };
   }
 
   function pointInsideRect(x, y, rect, buffer = 0) {
@@ -596,8 +804,30 @@
     return tokens.some((token) => str.includes(String(token).toLowerCase()));
   }
 
+  function hasRejectedContext(node) {
+    if (closestAny(node, state.siteProfile?.rejectSelectors)) return true;
+    let current = node;
+    while (
+      current &&
+      current !== document.body &&
+      current !== document.documentElement
+    ) {
+      if (matchesAny(current, state.siteProfile?.rejectSelectors)) return true;
+      if (
+        current.tagName?.toLowerCase() === "main" ||
+        current.getAttribute?.("role") === "main"
+      ) {
+        break;
+      }
+      if (containsRejectToken(current)) return true;
+      current = current.parentElement;
+    }
+    return false;
+  }
+
   function isVisible(el, rect = null, style = null) {
     if (!el || !document.contains(el)) return false;
+    if (el.closest?.('[hidden], [aria-hidden="true"], [inert]')) return false;
     const r = rect || el.getBoundingClientRect();
     if (!r.width || !r.height) return false;
     if (
@@ -678,7 +908,28 @@
     return { x: state.pointerX, y: state.pointerY };
   }
 
-  function readingBandPoint() {
+  function readingBandPoint(container = null) {
+    if (
+      container &&
+      container !== document &&
+      container !== document.body &&
+      container !== document.documentElement &&
+      document.contains(container)
+    ) {
+      const rect = container.getBoundingClientRect();
+      const left = clamp(rect.left, 0, window.innerWidth);
+      const right = clamp(rect.right, 0, window.innerWidth);
+      const top = clamp(rect.top, 0, window.innerHeight);
+      const bottom = clamp(rect.bottom, 0, window.innerHeight);
+      return {
+        x: Math.round((left + right) / 2),
+        y: Math.round(
+          top +
+            (bottom - top) *
+              clamp(Number(state.settings.readingBandY) || 0.42, 0.2, 0.75),
+        ),
+      };
+    }
     return {
       x: Math.round(window.innerWidth * 0.5),
       y: Math.round(
@@ -794,11 +1045,7 @@
 
   function candidateScore(el, point, family) {
     if (!el || !document.contains(el)) return -Infinity;
-    if (
-      matchesAny(el, state.siteProfile?.rejectSelectors) ||
-      containsRejectToken(el)
-    )
-      return -Infinity;
+    if (hasRejectedContext(el)) return -Infinity;
     const style = getComputedStyle(el);
     if (
       style.display === "none" ||
@@ -817,6 +1064,10 @@
     const viewportArea = Math.max(1, window.innerWidth * window.innerHeight);
     const area = Math.max(1, r.width * r.height);
     const areaRatio = area / viewportArea;
+    const isExplicitSurface = matchesAny(
+      el,
+      state.siteProfile?.surfaceSelectors,
+    );
     let score = 0;
     if (
       pointInsideRect(
@@ -832,7 +1083,7 @@
         40,
       18,
     );
-    if (matchesAny(el, state.siteProfile?.surfaceSelectors)) score += 12;
+    if (isExplicitSurface) score += 18;
     if (matchesAny(el, state.siteProfile?.preferSelectors)) score += 8;
     if (matchesAny(el, state.siteProfile?.quickSelectors)) score += 4;
     if (
@@ -854,12 +1105,14 @@
     const rowLike = family === "compare" ? repeatedSiblingPattern(el, r) : 0;
 
     if (family === "read") {
-      score += Math.min(textLen / 80, 28);
+      score += Math.min(textLen / 100, 18);
       score += Math.min(paragraphCount * 1.8, 10);
       score -= Math.min(interactiveCount, 20) * 0.8;
       if (matchesAny(el, [READ_SURFACE_SELECTOR])) score += 12;
       if (areaRatio >= 0.04 && areaRatio <= 0.42) score += 8;
       if (areaRatio > 0.55) score -= Math.min((areaRatio - 0.55) * 48, 22);
+      if (!isExplicitSurface)
+        score -= Math.min(readSurfaceChildCount(el) * 10, 40);
       if (isBroadReadContainer(el, areaRatio))
         score -= Math.min(readSurfaceChildCount(el) * 7, 28);
       if (areaRatio > 0.9) score -= 18;
@@ -879,6 +1132,9 @@
   }
 
   function bestSurfaceNearPoint(point, family) {
+    const origin = document.elementFromPoint(point.x, point.y);
+    if (!origin || hasRejectedContext(origin)) return null;
+
     const candidates = collectCandidatesFromPoint(point.x, point.y);
     let best = null;
     let bestScore = -Infinity;
@@ -894,14 +1150,7 @@
       const fallbackSelectors = selectorList(
         state.siteProfile?.fallbackSelectors,
       );
-      const fallback =
-        closestAny(
-          document.elementFromPoint(point.x, point.y),
-          fallbackSelectors,
-        ) ||
-        (fallbackSelectors.length
-          ? document.querySelector(fallbackSelectors.join(","))
-          : null);
+      const fallback = closestAny(origin, fallbackSelectors);
       if (fallback && isVisible(fallback)) best = fallback;
     }
     return best;
@@ -926,6 +1175,146 @@
 
   function nearestSurfaceFromPointer(family, sourceEl = null) {
     return nearestSurfaceFromPoint(family, pointerPoint(), sourceEl);
+  }
+
+  function visibleCompositeItemCount(surface) {
+    if (!surface?.querySelectorAll) return 0;
+    const selector = [
+      ':scope > [role="row"]',
+      ':scope > [role="listitem"]',
+      ':scope > [role="option"]',
+      ':scope > [role="treeitem"]',
+      ':scope > [role="gridcell"]',
+      ":scope > tbody > tr",
+      '[role="row"]',
+      '[role="listitem"]',
+      '[role="option"]',
+      '[role="treeitem"]',
+      '[role="gridcell"]',
+    ].join(",");
+    try {
+      return [...surface.querySelectorAll(selector)]
+        .filter((item) => isVisible(item))
+        .slice(0, 5).length;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  function hasRejectedCollectionContext(origin) {
+    let current = origin;
+    while (
+      current &&
+      current !== document.body &&
+      current !== document.documentElement
+    ) {
+      if (
+        matchesAny(current, state.siteProfile?.rejectSelectors) ||
+        containsRejectToken(current)
+      ) {
+        return true;
+      }
+      if (
+        current.tagName?.toLowerCase() === "main" ||
+        current.getAttribute?.("role") === "main"
+      ) {
+        break;
+      }
+      current = current.parentElement;
+    }
+    return false;
+  }
+
+  function collectionSurfaceFrom(origin) {
+    if (!origin?.closest || hasRejectedCollectionContext(origin)) return null;
+    const explicit = closestAny(origin, state.siteProfile?.collectionSelectors);
+    if (explicit && isVisible(explicit)) return explicit;
+    const semantic = origin.closest(COMPOSITE_COLLECTION_SELECTOR);
+    if (
+      semantic &&
+      isVisible(semantic) &&
+      visibleCompositeItemCount(semantic) >= 4
+    ) {
+      return semantic;
+    }
+    return null;
+  }
+
+  function detailSurfaceFrom(origin) {
+    const detail = closestAny(origin, state.siteProfile?.detailSelectors);
+    return detail && isVisible(detail) ? detail : null;
+  }
+
+  function mediaSurfaceFrom(origin) {
+    const video = origin?.closest?.(MEDIA_SELECTOR);
+    if (!video || !isVisible(video)) return null;
+    const player = closestAny(video, [
+      '[data-testid*="player" i]',
+      '[class*="video-player" i]',
+      '[class*="player-container" i]',
+      "figure",
+    ]);
+    if (!player || !isVisible(player)) return video;
+    const rect = player.getBoundingClientRect();
+    if (
+      rect.width > window.innerWidth * 0.96 ||
+      rect.height > window.innerHeight * 0.92
+    ) {
+      return video;
+    }
+    return player;
+  }
+
+  function isStrongPlayingVideo(video) {
+    if (
+      !video ||
+      !document.contains(video) ||
+      video.paused ||
+      video.ended ||
+      !isVisible(video)
+    ) {
+      return false;
+    }
+    const audible = !video.muted && Number(video.volume) > 0;
+    const activatedAt = state.mediaActivatedAt.get(video) || 0;
+    const recentlyActivated = nowTs() - activatedAt < 5000;
+    const ownsFocus =
+      video === state.activeMedia && state.activeMode === "media";
+    return audible || recentlyActivated || ownsFocus;
+  }
+
+  function resolvedTargetFromPoint(family, point, sourceEl = null) {
+    const origin =
+      sourceEl || document.elementFromPoint(point.x, point.y) || null;
+    if (!origin) return null;
+    if (transientInteractionFrom(origin)) return { suspended: true };
+
+    const directMedia = mediaSurfaceFrom(origin);
+    if (directMedia) {
+      return { surface: directMedia, mode: "media", origin };
+    }
+
+    const detail = detailSurfaceFrom(origin);
+    if (detail) return { surface: detail, mode: "read", origin };
+
+    const collection = collectionSurfaceFrom(origin);
+    if (collection) return { surface: collection, mode: "scan", origin };
+
+    const surface = nearestSurfaceFromPoint(family, point, sourceEl);
+    if (!surface) return null;
+
+    const promotedCollection = collectionSurfaceFrom(surface);
+    if (promotedCollection) {
+      return { surface: promotedCollection, mode: "scan", origin };
+    }
+    return { surface, mode: family, origin };
+  }
+
+  function directSurfaceFromPointer(family, sourceEl) {
+    if (!sourceEl || hasRejectedContext(sourceEl)) return null;
+    const explicit = closestAny(sourceEl, state.siteProfile?.surfaceSelectors);
+    if (explicit && isVisible(explicit)) return explicit;
+    return nearestSurfaceFromPointer(family, sourceEl);
   }
 
   function visibleElementCenter(el) {
@@ -996,9 +1385,10 @@
       24,
     );
     if (pointerInside) return true;
+    if (state.lastPointerMoveAt >= state.lastInteractionAt) return false;
     return (
       nowTs() - state.lastInteractionAt <
-      (state.settings.pointerPriorityMs || 220)
+      (state.settings.interactionGraceMs || 700)
     );
   }
 
@@ -1040,21 +1430,40 @@
       }
       hideOverlay(true);
       clearObservers();
+      focusCoordinator.clear();
       return;
     }
+    const previousSurface = state.activeSurface;
+    const shouldAnimate = !!(
+      state.visible &&
+      previousSurface &&
+      previousSurface !== surface
+    );
     state.activeSurface = surface;
     state.activeMode = mode;
     state.pinned = !!pin;
     const rect = rectForElement(surface);
     if (!rect) {
       hideOverlay(true);
+      focusCoordinator.clear();
       return;
     }
-    setShellRect(rect);
+    setShellRect(rect, { animate: shouldAnimate });
     attachObservers(surface);
+    state.lastAcceptedAt = nowTs();
+    focusCoordinator.sync({ surface, mode }, state.lastAcceptedAt);
   }
 
   function refreshActiveSurface() {
+    if (
+      state.fullscreenSuspended ||
+      document.fullscreenElement ||
+      state.dragging ||
+      nowTs() < state.interactionUntil
+    ) {
+      hideOverlay(true, { preserveSurface: true });
+      return;
+    }
     if (!state.activeSurface || !document.contains(state.activeSurface)) {
       state.activeSurface = null;
       state.activeMode = null;
@@ -1085,81 +1494,96 @@
     state.rafId = requestAnimationFrame(() => refreshActiveSurface());
   }
 
-  function scheduleReacquire() {
+  function scheduleReacquire(delay = state.settings.dwellMs) {
     clearTimeout(state.transitionTimer);
-    const delay = Math.max(120, effectiveAutoAcquireDelay());
-    state.transitionTimer = setTimeout(() => {
-      if (!canAutoRun() || state.pinned) return;
-      acquireSurface("transition");
-    }, delay);
+    state.transitionTimer = setTimeout(
+      () => {
+        if (!canAutoRun() || state.pinned) return;
+        acquireSurface("transition");
+      },
+      Math.max(120, Number(delay) || 0),
+    );
   }
 
   function clearTimers() {
     clearTimeout(state.hoverTimer);
-    clearTimeout(state.previewTimer);
     clearTimeout(state.scrollTimer);
+    clearTimeout(state.exitTimer);
     clearTimeout(state.transitionTimer);
     clearTimeout(state.mutationRefreshTimer);
     clearTimeout(state.routeCheckTimer);
     clearInterval(state.routePollId);
     clearHideTimer();
     cancelAnimationFrame(state.rafId);
-    state.hoverTimer =
-      state.previewTimer =
-      state.scrollTimer =
-      state.transitionTimer =
-        null;
+    cancelSpotlightMotion();
+    state.hoverTimer = state.scrollTimer = state.transitionTimer = null;
+    state.hoverHint = null;
+    state.hoverMode = null;
+    state.exitTimer = null;
     state.mutationRefreshTimer = state.routeCheckTimer = null;
     state.routePollId = null;
     state.rafId = 0;
   }
 
-  function autoAcquireCooldownRemaining() {
-    return Math.max(0, state.nextAutoAcquireAt - nowTs());
-  }
-
-  function effectiveAutoAcquireDelay() {
-    if (state.actionLockEl && !activeTyping()) {
-      return Math.min(
-        autoAcquireCooldownRemaining(),
-        Math.max(0, state.actionUntil - nowTs()),
-      );
+  function focusDelayFor(target) {
+    const targetVideo = target?.origin?.closest?.(MEDIA_SELECTOR);
+    const targetActivatedAt = targetVideo
+      ? state.mediaActivatedAt.get(targetVideo) || 0
+      : 0;
+    if (target?.mode === "media" && nowTs() - targetActivatedAt < 5000) {
+      return state.settings.mediaFocusMs;
     }
-    return autoAcquireCooldownRemaining();
+    if (!state.activeSurface || !state.visible) return state.settings.dwellMs;
+    if (state.activeMode === "media" && isStrongPlayingVideo(state.activeMedia))
+      return Math.max(1800, state.settings.refocusDwellMs);
+    return state.settings.refocusDwellMs;
   }
 
-  function bumpAutoAcquireCooldown(
-    ms = state.settings.refocusCooldownMs ?? 5000,
-  ) {
-    const until = nowTs() + ms;
-    if (until > state.nextAutoAcquireAt) state.nextAutoAcquireAt = until;
+  function commitResolvedTarget(target) {
+    if (!target?.surface) return null;
+    switchSurface(target.surface, target.mode);
+    return target.surface;
   }
 
-  function autoAcquireBlocked(reason) {
+  function restoreIncumbent() {
     if (
-      reason === "manual" ||
-      reason === "click" ||
-      reason === "focus" ||
-      reason === "keydown" ||
-      reason === "scroll" ||
-      reason === "hover"
-    )
+      !canManualRun() ||
+      visibleTransientInteraction() ||
+      !state.activeSurface ||
+      !document.contains(state.activeSurface)
+    ) {
       return false;
-    if (state.actionLockEl && !activeTyping() && nowTs() >= state.actionUntil)
-      return false;
-    return autoAcquireCooldownRemaining() > 0;
+    }
+    const rect = rectForElement(state.activeSurface);
+    if (!rect) return false;
+    setShellRect(rect);
+    return true;
   }
 
-  function usePointerReadTruth() {
-    return (
-      nowTs() - state.lastPointerMoveAt > state.settings.dwellMs &&
-      !activeTyping()
+  function suspendAutomaticFocus(grace = state.settings.interactionGraceMs) {
+    clearHoverResidence();
+    clearTimeout(state.scrollTimer);
+    focusCoordinator.suspend();
+    state.interactionUntil = Math.max(
+      state.interactionUntil,
+      nowTs() + Math.max(0, Number(grace) || 0),
+    );
+    hideOverlay(true, { preserveSurface: true });
+    clearTimeout(state.transitionTimer);
+    state.transitionTimer = setTimeout(
+      () => {
+        if (visibleTransientInteraction()) {
+          suspendAutomaticFocus(grace);
+          return;
+        }
+        if (!restoreIncumbent()) scheduleReacquire();
+      },
+      Math.max(120, Number(grace) || 0),
     );
   }
 
   function acquireSurface(reason) {
     if (!canAutoRun() || !state.hasUserInteracted || state.pinned) return null;
-    if (autoAcquireBlocked(reason)) return null;
 
     let family = pageFamily();
     let sourceEl = null;
@@ -1170,68 +1594,111 @@
       sourceEl = state.actionLockEl;
     }
 
-    if (reason === "hover" || reason === "transition") {
-      if (usePointerReadTruth()) {
-        family = pageFamily();
-        sourceEl = null;
-      }
-    }
-
     if (reason === "scroll" && !actionSurfaceShouldWin()) {
       family = pageFamily();
       sourceEl = null;
-      point = readingBandPoint();
+      point = readingBandPoint(state.lastScrollContainer);
     }
 
-    let surface = nearestSurfaceFromPoint(family, point, sourceEl);
-
-    if (!surface && family !== "read") {
-      surface = nearestSurfaceFromPoint(pageFamily(), point);
-      family = pageFamily();
-    }
-
-    if (!surface) {
-      hideOverlay(false);
+    let target = resolvedTargetFromPoint(family, point, sourceEl);
+    if (target?.suspended) {
+      suspendAutomaticFocus();
       return null;
     }
-
-    switchSurface(surface, family);
-    return surface;
+    if (!target && family !== "read") {
+      target = resolvedTargetFromPoint(pageFamily(), point);
+    }
+    if (!target) {
+      schedulePointerExit();
+      return null;
+    }
+    return commitResolvedTarget(target);
   }
 
-  function queueHoverAcquire() {
+  function clearHoverResidence() {
     clearTimeout(state.hoverTimer);
-    if (!canAutoRun() || !state.settings.autoOnHover || state.pinned) return;
-    const delay = state.settings.dwellMs;
-    state.hoverTimer = setTimeout(() => {
-      acquireSurface("hover");
-    }, delay);
+    state.hoverTimer = null;
+    state.hoverHint = null;
+    state.hoverMode = null;
+    focusCoordinator.resetChallenger();
   }
 
-  function queueBoundaryPreview() {
-    clearTimeout(state.previewTimer);
-    if (
-      !canAutoRun() ||
-      !state.settings.autoOnHover ||
-      state.pinned ||
-      state.visible
-    )
+  function queueHoverAcquire(sourceEl) {
+    if (!canAutoRun() || !state.settings.autoOnHover || state.pinned) return;
+    const target = resolvedTargetFromPoint(
+      pageFamily(),
+      pointerPoint(),
+      sourceEl,
+    );
+    if (target?.suspended) {
+      suspendAutomaticFocus();
       return;
-    state.previewTimer = setTimeout(() => {
-      if (!canAutoRun() || state.pinned || state.visible) return;
-      const surface = nearestSurfaceFromPointer(pageFamily());
-      const rect = rectForElement(surface);
-      if (rect) setPreviewRect(rect);
-    }, 120);
+    }
+    if (!target?.surface) {
+      clearHoverResidence();
+      schedulePointerExit();
+      return;
+    }
+    clearExitTimer();
+    clearHideTimer();
+
+    const candidateChanged =
+      target.surface !== state.hoverHint || target.mode !== state.hoverMode;
+    const anchorMoved =
+      distance(
+        state.hoverAnchorX,
+        state.hoverAnchorY,
+        state.pointerX,
+        state.pointerY,
+      ) >= state.settings.stationaryTolerance;
+    if (candidateChanged || anchorMoved) {
+      clearTimeout(state.hoverTimer);
+      focusCoordinator.resetChallenger();
+      state.hoverAnchorX = state.pointerX;
+      state.hoverAnchorY = state.pointerY;
+    } else if (state.hoverTimer) {
+      return;
+    }
+
+    state.hoverHint = target.surface;
+    state.hoverMode = target.mode;
+    const delay = focusDelayFor(target);
+    const observedAt = nowTs();
+    const currentChallenger = focusCoordinator.snapshot().challenger;
+    const challengerSince =
+      currentChallenger?.surface === target.surface &&
+      currentChallenger.mode === target.mode
+        ? currentChallenger.since
+        : observedAt;
+    const quietDelay = Math.max(
+      0,
+      state.lastPointerMoveAt + state.settings.pointerQuietMs - challengerSince,
+    );
+    const decision = focusCoordinator.observe(target, {
+      now: observedAt,
+      delay: Math.max(delay, quietDelay),
+    });
+    if (decision.action === "hold") {
+      clearHoverResidence();
+      return;
+    }
+    if (decision.action === "commit") {
+      commitResolvedTarget(target);
+      clearHoverResidence();
+      return;
+    }
+
+    state.hoverTimer = setTimeout(() => {
+      state.hoverTimer = null;
+      const current = document.elementFromPoint(state.pointerX, state.pointerY);
+      queueHoverAcquire(current);
+    }, decision.remaining || delay);
   }
 
   function queueScrollAcquire() {
     clearTimeout(state.scrollTimer);
     if (!canAutoRun() || !state.settings.autoOnScroll || state.pinned) return;
-    const delay = Math.max(
-      state.settings.scrollIdleMs,
-      effectiveAutoAcquireDelay(),
-    );
+    const delay = state.settings.scrollIdleMs;
     state.scrollTimer = setTimeout(() => {
       acquireSurface("scroll");
     }, delay);
@@ -1244,49 +1711,50 @@
     state.lastInteractionAt = nowTs();
   }
 
-  function maybeHideOnPointerExit() {
-    if (!state.visible || !state.activeRect || state.pinned) return;
-    const buffer = state.settings.revealBuffer;
-    if (
-      !pointInsideRect(state.pointerX, state.pointerY, state.activeRect, buffer)
-    ) {
-      const farOutside = !pointInsideRect(
-        state.pointerX,
-        state.pointerY,
-        state.activeRect,
-        buffer * 2.2,
-      );
-      hideOverlay(farOutside);
-    }
+  function schedulePointerExit() {
+    if (state.exitTimer || !state.visible || state.pinned) return;
+    state.exitTimer = setTimeout(() => {
+      state.exitTimer = null;
+      if (
+        !state.pinned &&
+        state.activeRect &&
+        !pointInsideRect(
+          state.pointerX,
+          state.pointerY,
+          state.activeRect,
+          state.settings.revealBuffer,
+        )
+      ) {
+        hideOverlay(false);
+      }
+    }, state.settings.noTargetHoldMs);
   }
 
   function onPointerMove(event) {
-    const moved = distance(
-      state.pointerX,
-      state.pointerY,
-      event.clientX,
-      event.clientY,
-    );
     state.pointerX = event.clientX;
     state.pointerY = event.clientY;
     state.lastPointerMoveAt = nowTs();
     state.hasUserInteracted = true;
 
-    if (moved >= state.settings.stationaryTolerance) {
-      if (
-        state.visible &&
-        state.activeRect &&
-        pointInsideRect(state.pointerX, state.pointerY, state.activeRect, 0)
-      ) {
-        maybeHideOnPointerExit();
-        return;
+    if (state.pickMode) {
+      const surface = directSurfaceFromPointer(pageFamily(), event.target);
+      if (surface) {
+        state.pickSurface = surface;
+        switchSurface(surface, pageFamily());
+        state.shell?.classList.add("choosing");
+      } else {
+        state.pickSurface = null;
+        hideOverlay(false);
       }
-      bumpAutoAcquireCooldown();
-      if (!state.pinned && state.visible) hideOverlay(true);
-      queueBoundaryPreview();
-      queueHoverAcquire();
+      return;
     }
-    maybeHideOnPointerExit();
+
+    if (state.pinned) return;
+    if (transientInteractionFrom(event.target)) {
+      suspendAutomaticFocus();
+      return;
+    }
+    queueHoverAcquire(event.target);
   }
 
   function onScroll(event) {
@@ -1297,23 +1765,20 @@
       target === document.documentElement ||
       target === document.body ||
       target === document.scrollingElement;
-    if (!isDocumentScroll && !state.activeSurface) return;
     state.hasUserInteracted = true;
     state.lastScrollAt = nowTs();
-    clearTimeout(state.hoverTimer);
-    clearTimeout(state.previewTimer);
-    state.hoverTimer = state.previewTimer = null;
-    bumpAutoAcquireCooldown();
+    state.lastScrollContainer = isDocumentScroll ? null : target;
+    clearHoverResidence();
     if (state.activeSurface && !state.pinned) scheduleSurfaceRefresh("scroll");
-    else if (!state.pinned) {
-      if (state.visible) hideOverlay(true);
-      else clearPreview();
-    }
     queueScrollAcquire();
   }
 
   function onFocusIn(event) {
     const target = event.target;
+    if (transientInteractionFrom(target)) {
+      suspendAutomaticFocus();
+      return;
+    }
     if (isEditable(target)) {
       recordActionLock(target, "create");
       if (
@@ -1329,13 +1794,70 @@
       }
     } else if (isInteractive(target)) {
       recordActionLock(target, "act");
+      const collection = collectionSurfaceFrom(target);
+      if (collection && canAutoRun()) switchSurface(collection, "scan");
     }
+  }
+
+  function interactiveTriggerOpensLayer(target) {
+    if (!target?.closest) return false;
+    return !!target.closest(
+      '[aria-haspopup], [aria-expanded="true"], [role="menuitem"], [role="combobox"]',
+    );
+  }
+
+  function onPointerDown(event) {
+    state.hasUserInteracted = true;
+    const target = event.target;
+    const video = target.closest?.(MEDIA_SELECTOR);
+    if (video) state.mediaActivatedAt.set(video, nowTs());
+    if (
+      interactiveTriggerOpensLayer(target) ||
+      transientInteractionFrom(target)
+    ) {
+      suspendAutomaticFocus();
+      return;
+    }
+    if (isInteractive(target) && !state.activeSurface?.contains(target)) {
+      suspendAutomaticFocus();
+    }
+  }
+
+  function onDragStart() {
+    state.dragging = true;
+    suspendAutomaticFocus(state.settings.actionLockMs);
+  }
+
+  function onDragEnd() {
+    state.dragging = false;
+    suspendAutomaticFocus(state.settings.interactionGraceMs);
   }
 
   function onClick(event) {
     state.hasUserInteracted = true;
-    state.lastClickAt = nowTs();
     const target = event.target;
+    const clickedVideo = target.closest?.(MEDIA_SELECTOR);
+    if (clickedVideo) {
+      state.mediaActivatedAt.set(clickedVideo, nowTs());
+    }
+    if (state.pickMode) {
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      state.pickMode = false;
+      state.shell?.classList.remove("choosing");
+      if (state.pickSurface && document.contains(state.pickSurface)) {
+        state.activeSurface = state.pickSurface;
+        state.pinned = true;
+        attachObservers(state.activeSurface);
+      } else {
+        state.pinned = false;
+        hideOverlay(true);
+      }
+      state.pickSurface = null;
+      pushRuntimeState();
+      return;
+    }
     if (isEditable(target)) {
       recordActionLock(target, "create");
       if (canAutoRun()) switchSurface(findInteractionShell(target), "create");
@@ -1343,6 +1865,15 @@
     }
     if (isInteractive(target)) {
       recordActionLock(target, "act");
+      if (interactiveTriggerOpensLayer(target)) {
+        suspendAutomaticFocus();
+        return;
+      }
+      const collection = collectionSurfaceFrom(target);
+      if (collection && canAutoRun()) {
+        switchSurface(collection, "scan");
+        return;
+      }
       if (
         state.visible &&
         state.activeRect &&
@@ -1364,7 +1895,23 @@
   }
 
   function onKeyDown(event) {
+    if (event.key === "Escape" && state.pickMode) {
+      state.pickMode = false;
+      state.pickSurface = null;
+      state.shell?.classList.remove("choosing");
+      hideOverlay(true);
+      pushRuntimeState();
+      return;
+    }
+    if (visibleTransientInteraction()) {
+      suspendAutomaticFocus();
+      return;
+    }
     const activeElement = document.activeElement;
+    if (transientInteractionFrom(activeElement)) {
+      suspendAutomaticFocus();
+      return;
+    }
     if (isEditable(activeElement)) {
       state.lastKeyAt = nowTs();
       recordActionLock(activeElement, "create");
@@ -1383,16 +1930,99 @@
       state.pinned = false;
       state.actionLockEl = null;
       state.actionUntil = 0;
-      bumpAutoAcquireCooldown(0);
+      state.activeSurface = null;
+      state.activeMode = null;
+      focusCoordinator.clear();
       hideOverlay(true);
       scheduleReacquire();
     }
+  }
+
+  function onMediaPlay(event) {
+    const video = event.target;
+    if (!(video instanceof HTMLVideoElement) || !isVisible(video)) return;
+    if (!isStrongPlayingVideo(video)) return;
+    state.activeMedia = video;
+    const surface = mediaSurfaceFrom(video);
+    if (!surface || state.pinned || !canAutoRun()) return;
+    clearTimeout(state.transitionTimer);
+    state.transitionTimer = setTimeout(() => {
+      if (isStrongPlayingVideo(video) && canAutoRun() && !state.pinned) {
+        switchSurface(surface, "media");
+      }
+    }, state.settings.mediaFocusMs);
+  }
+
+  function onMediaStop(event) {
+    if (
+      event.target !== state.activeMedia &&
+      event.target !== state.pictureInPictureMedia
+    )
+      return;
+    if (event.target === state.activeMedia) state.activeMedia = null;
+    if (event.target === state.pictureInPictureMedia) return;
+    scheduleReacquire(state.settings.interactionGraceMs);
+  }
+
+  function onEnterPictureInPicture(event) {
+    if (!(event.target instanceof HTMLVideoElement)) return;
+    state.pictureInPictureMedia = event.target;
+    if (event.target === state.activeMedia) state.activeMedia = null;
+    if (state.activeMode === "media") {
+      state.activeSurface = null;
+      state.activeMode = null;
+      focusCoordinator.clear();
+      hideOverlay(true);
+    }
+  }
+
+  function onLeavePictureInPicture(event) {
+    const video = event.target;
+    if (video !== state.pictureInPictureMedia) return;
+    state.pictureInPictureMedia = null;
+    if (!isStrongPlayingVideo(video) || !canAutoRun() || state.pinned) {
+      scheduleReacquire(state.settings.interactionGraceMs);
+      return;
+    }
+    state.activeMedia = video;
+    const surface = mediaSurfaceFrom(video);
+    if (!surface) return;
+    clearTimeout(state.transitionTimer);
+    state.transitionTimer = setTimeout(() => {
+      if (isStrongPlayingVideo(video) && canAutoRun() && !state.pinned) {
+        switchSurface(surface, "media");
+      }
+    }, state.settings.mediaFocusMs);
+  }
+
+  function onFullscreenChange() {
+    state.fullscreenSuspended = !!document.fullscreenElement;
+    if (state.fullscreenSuspended) {
+      suspendAutomaticFocus(state.settings.fullscreenExitGraceMs);
+      return;
+    }
+    state.interactionUntil = nowTs() + state.settings.fullscreenExitGraceMs;
+    clearTimeout(state.transitionTimer);
+    state.transitionTimer = setTimeout(() => {
+      if (!restoreIncumbent()) scheduleReacquire();
+    }, state.settings.fullscreenExitGraceMs);
   }
 
   function loadSettings() {
     return new Promise((resolve) => {
       storage.get(null, (items) => resolve(normalizeSettings(items || {})));
     });
+  }
+
+  async function loadTabPause() {
+    try {
+      const response = await chrome.runtime.sendMessage({
+        type: "UMBRA_GET_TAB_PAUSE",
+      });
+      return !!response?.pausedForTab;
+    } catch (_) {
+      return false;
+    }
   }
 
   function applySettings(newSettings) {
@@ -1407,14 +2037,24 @@
   }
 
   function runtimeState() {
-    return {
+    const snapshot = {
       pausedForTab: state.pausedForTab,
       hostname: location.hostname,
       siteMode: currentSiteMode(),
       autoBlockedReason: autoBlockedReason(),
       activeMode: state.activeMode,
+      hasActiveSurface: !!(
+        state.activeSurface && document.contains(state.activeSurface)
+      ),
+      pinned: state.pinned,
+      choosing: state.pickMode,
       profile: state.siteProfile?.id || "generic",
     };
+    if (state.settings.debug) {
+      snapshot.activeSurfaceId = state.activeSurface?.id || "";
+      snapshot.activeSurfaceTag = state.activeSurface?.tagName || "";
+    }
+    return snapshot;
   }
 
   function pushRuntimeState() {
@@ -1446,12 +2086,27 @@
           sendResponse({ pausedForTab: state.pausedForTab });
           return true;
         }
+        if (message.type === "UMBRA_BEGIN_PICK") {
+          if (canManualRun()) {
+            state.pickMode = true;
+            state.pickSurface = null;
+            state.pinned = false;
+            state.activeSurface = null;
+            hideOverlay(true);
+            sendResponse({ ok: true });
+          } else {
+            sendResponse({ ok: false, reason: autoBlockedReason() });
+          }
+          return true;
+        }
         if (message.type === "UMBRA_FOCUS_NOW") {
           if (canManualRun()) {
             const target = nearestManualSurface(pageFamily());
             if (target?.surface) switchSurface(target.surface, target.family);
+            sendResponse({ ok: !!target?.surface });
+          } else {
+            sendResponse({ ok: false, reason: autoBlockedReason() });
           }
-          sendResponse({ ok: true });
           return true;
         }
         if (message.type === "UMBRA_PIN_NOW") {
@@ -1459,7 +2114,22 @@
             const target = nearestManualSurface(pageFamily());
             if (target?.surface)
               switchSurface(target.surface, target.family, { pin: true });
+            sendResponse({ ok: !!target?.surface });
+          } else {
+            sendResponse({ ok: false, reason: autoBlockedReason() });
           }
+          return true;
+        }
+        if (message.type === "UMBRA_CLEAR_FOCUS") {
+          state.pickMode = false;
+          state.pickSurface = null;
+          state.pinned = false;
+          state.activeSurface = null;
+          state.activeMode = null;
+          state.shell?.classList.remove("choosing");
+          clearObservers();
+          hideOverlay(true);
+          pushRuntimeState();
           sendResponse({ ok: true });
           return true;
         }
@@ -1487,6 +2157,46 @@
       scheduleReacquire();
     };
     chrome.storage.onChanged.addListener(state.storageChangedHandler);
+  }
+
+  function queueInteractionLayerCheck() {
+    clearTimeout(state.interactionCheckTimer);
+    state.interactionCheckTimer = setTimeout(() => {
+      state.interactionCheckTimer = null;
+      if (visibleTransientInteraction()) {
+        suspendAutomaticFocus();
+        return;
+      }
+      if (
+        !state.dragging &&
+        !state.fullscreenSuspended &&
+        nowTs() >= state.interactionUntil &&
+        !state.visible
+      ) {
+        if (!restoreIncumbent()) scheduleReacquire();
+      }
+    }, 60);
+  }
+
+  function setupPageObserver() {
+    state.pageObserver?.disconnect();
+    state.pageObserver = new MutationObserver(queueInteractionLayerCheck);
+    state.pageObserver.observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: [
+        "aria-expanded",
+        "aria-hidden",
+        "aria-modal",
+        "class",
+        "hidden",
+        "inert",
+        "open",
+        "popover",
+        "style",
+      ],
+    });
   }
 
   function handleLocationChange() {
@@ -1541,20 +2251,45 @@
     scheduleSurfaceRefresh("resize");
   }
 
+  function handleVisibility(hidden) {
+    if (hidden) {
+      hideOverlay(true, { preserveSurface: true });
+      return;
+    }
+    if (!restoreIncumbent()) scheduleReacquire();
+  }
+
   function onVisibilityChange() {
-    if (document.hidden) hideOverlay(true);
-    else scheduleReacquire();
+    handleVisibility(document.hidden);
   }
 
   function teardown() {
     window.removeEventListener("mousemove", onPointerMove);
+    document.removeEventListener("pointerdown", onPointerDown, true);
     document.removeEventListener("scroll", onScroll, true);
     window.removeEventListener("resize", onResize);
     document.removeEventListener("focusin", onFocusIn, true);
     document.removeEventListener("click", onClick, true);
     document.removeEventListener("keydown", onKeyDown, true);
+    document.removeEventListener("dragstart", onDragStart, true);
+    document.removeEventListener("dragend", onDragEnd, true);
+    document.removeEventListener("play", onMediaPlay, true);
+    document.removeEventListener("pause", onMediaStop, true);
+    document.removeEventListener("ended", onMediaStop, true);
+    document.removeEventListener(
+      "enterpictureinpicture",
+      onEnterPictureInPicture,
+      true,
+    );
+    document.removeEventListener(
+      "leavepictureinpicture",
+      onLeavePictureInPicture,
+      true,
+    );
+    document.removeEventListener("fullscreenchange", onFullscreenChange);
     document.removeEventListener("visibilitychange", onVisibilityChange);
     window.removeEventListener("pagehide", onPageHide);
+    window.removeEventListener("pageshow", onPageShow);
     window.removeEventListener("popstate", onPopState);
     if (state.navigationHandler && globalThis.navigation?.removeEventListener) {
       globalThis.navigation.removeEventListener(
@@ -1569,6 +2304,10 @@
       chrome.storage.onChanged.removeListener(state.storageChangedHandler);
     }
     clearObservers();
+    state.pageObserver?.disconnect();
+    state.pageObserver = null;
+    clearTimeout(state.interactionCheckTimer);
+    state.interactionCheckTimer = null;
     clearTimers();
     state.overlayHost?.remove();
     state.overlayHost = null;
@@ -1587,8 +2326,23 @@
     globalThis.__umbraInjected = false;
   }
 
-  function onPageHide() {
+  function onPageHide(event) {
+    if (event?.persisted) {
+      hideOverlay(true);
+      return;
+    }
     teardown();
+  }
+
+  function onPageShow(event) {
+    if (!event?.persisted) return;
+    state.siteProfile = resolveSiteProfile();
+    loadSettings()
+      .then(applySettings)
+      .catch(() => {});
+    if (state.pinned) refreshActiveSurface();
+    else scheduleReacquire();
+    pushRuntimeState();
   }
 
   if (globalThis.__UMBRA_TEST_HOOKS__) {
@@ -1598,10 +2352,15 @@
       distance,
       normalizeHost,
       candidateScore,
+      collectionSurfaceFrom,
       repeatedSiblingPattern,
+      resolvedTargetFromPoint,
       pageFamily,
+      focusCoordinator,
       rectForElement,
       handleLocationChange,
+      handleVisibility,
+      switchSurface,
       teardown,
     };
   }
@@ -1609,13 +2368,20 @@
   async function mount() {
     globalThis.UMBRA_RUNTIME = { teardown, version: RUNTIME_VERSION };
     state.siteProfile = resolveSiteProfile();
-    applySettings(await loadSettings());
+    const [settings, pausedForTab] = await Promise.all([
+      loadSettings(),
+      loadTabPause(),
+    ]);
+    state.pausedForTab = pausedForTab;
+    applySettings(settings);
     ensureOverlay();
     setupRuntime();
     setupStorageWatcher();
     setupRouteWatcher();
+    setupPageObserver();
 
     window.addEventListener("mousemove", onPointerMove, { passive: true });
+    document.addEventListener("pointerdown", onPointerDown, true);
     document.addEventListener("scroll", onScroll, {
       capture: true,
       passive: true,
@@ -1624,8 +2390,25 @@
     document.addEventListener("focusin", onFocusIn, true);
     document.addEventListener("click", onClick, true);
     document.addEventListener("keydown", onKeyDown, true);
+    document.addEventListener("dragstart", onDragStart, true);
+    document.addEventListener("dragend", onDragEnd, true);
+    document.addEventListener("play", onMediaPlay, true);
+    document.addEventListener("pause", onMediaStop, true);
+    document.addEventListener("ended", onMediaStop, true);
+    document.addEventListener(
+      "enterpictureinpicture",
+      onEnterPictureInPicture,
+      true,
+    );
+    document.addEventListener(
+      "leavepictureinpicture",
+      onLeavePictureInPicture,
+      true,
+    );
+    document.addEventListener("fullscreenchange", onFullscreenChange);
     document.addEventListener("visibilitychange", onVisibilityChange);
     window.addEventListener("pagehide", onPageHide);
+    window.addEventListener("pageshow", onPageShow);
 
     if (!canManualRun()) hideOverlay(true);
     pushRuntimeState();

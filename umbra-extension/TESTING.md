@@ -21,21 +21,30 @@ npm run validate
 - `feed.html`: same-document route handling.
 - `comparative-table.html`: table fixture for comparative targeting work.
 - `composer.html`: composer fixture for action-lock and typing checks.
-- `transformed-html.html`: transformed-root fixture for four-rectangle dimming and native modal suppression.
+- `transformed-html.html`: transformed-root fixture for masked dimming and native modal suppression.
 - `noisy-chat-app.html`: ChatGPT/Codex-style app shell with sidebars, sticky header, composer, toolbars, and adjacent answer blocks.
 - `noisy-social-feed.html`: X/Instagram-style timeline with side rails, composer, sponsored content, a fixed drawer, repeated posts, and action buttons.
+- `productivity-workspace.html`: three-pane Gmail, Calendar, and Slack-style applications with composite collections, a sidebar mini-calendar, nested menus, a composer, competing videos, picture-in-picture, dragging, and fullscreen.
 
 ## Recommended Live QA Before Release
 
 1. ChatGPT or Codex: hover across adjacent answer blocks, then move into the composer and verify focus switches cleanly without selecting the page shell.
 2. X / Twitter or Instagram-style feeds: read adjacent posts near promoted content, side rails, and fixed drawers; verify posts win over surrounding chrome.
-3. Gmail: test inbox rows, opened message bodies, and compose.
-4. Comparative site such as CoinGecko: verify row-level autofocus does not activate by default.
-5. Utility site such as Calendar or Figma: verify Auto stays suppressed or Off by default.
+3. Gmail: move across inbox rows and controls; verify the complete list stays visible, then open a message and verify the reading pane wins.
+4. Calendar: move across cells and events; verify the current grid stays visible and event menus suspend the overlay.
+5. Slack: move through messages, the composer, reactions, menus, and submenus; verify the conversation stays stable and controls are never dimmed during use.
+6. YouTube or an inline news video: verify user-started playback can hold focus, muted autoplay cannot steal it, and fullscreen suspends Umbra.
+7. Comparative site such as CoinGecko: verify row-level autofocus does not activate by default.
 
 ## Acceptance criteria
 
-- pointer-local reading should win when there is no fresh direct manipulation elsewhere
-- creation surfaces should expand to include their controls
-- when a surface grows or collapses, the shell should reconcile within one visible layout beat
-- on uncertainty, Umbra should widen, soften, or stay off instead of cropping critical controls
+- First focus must not occur before 1 second of stable residence. Refocus must not occur before 1.45 seconds on one challenger.
+- Composite collections must remain whole while the user scans their rows or cells.
+- The current cutout must remain visible while the next block is confirmed.
+- Menus, dialogs, dragging, and fullscreen must suspend the overlay immediately.
+- Pinned focus must survive those interruptions and tab visibility changes.
+- Muted autoplay must not steal focus from user-started media.
+- The mask and outline must stay aligned during movement and clipping.
+- A clicked control must not trap the cutout after the pointer moves away.
+- Direct area selection must pin the block the user clicks.
+- When selection is uncertain, no focus is better than a broad app shell.

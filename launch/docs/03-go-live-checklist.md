@@ -2,49 +2,26 @@
 
 ## Chrome Web Store
 
-Package:
-
-- `dist/umbra-2.2.2.zip`
-
-Listing fields:
-
 - Publisher: Cassini Research
-- Product name: Umbra
-- Summary: Soft focus for reading dense pages without leaving the live web.
-- Description source: `umbra-extension/docs/STORE_LISTING.md`
-- Privacy policy source: `umbra-extension/PRIVACY.md`
+- Product: Umbra
+- Summary: `Keep one block clear on busy webpages without leaving the original site.`
+- Package: `dist/umbra-2.5.0.zip`
+- Listing copy: `umbra-extension/docs/STORE_LISTING.md`
+- Privacy policy: `umbra-extension/PRIVACY.md`
 
-Required assets:
+Upload:
 
-- Icon: `umbra-extension/icons/icon128.png`
-- Small promo tile: `launch/assets/poster/umbra-store-promo-440x280.png`
-- Screenshot 1: `launch/assets/screenshots/stackoverflow-questions.png`
-- Screenshot 2: `launch/assets/screenshots/chrome-developers-permissions.png`
-- Screenshot 3: `launch/assets/screenshots/wikipedia-cassini.png`
-- Screenshot 4: `launch/assets/screenshots/github-openai-cookbook-issues.png`
+- `umbra-extension/icons/icon128.png`
+- `launch/assets/poster/umbra-store-promo-440x280.png`
+- Four 1280 x 800 screenshots from `launch/assets/screenshots/`
 
-## Blog
+Before submission, confirm that the package version, listing copy, permission explanations, screenshots, and privacy answers describe the same build.
 
-Use `docs/04-blog-and-social.md` as the launch blog draft. Add the poster image near the top and include two screenshots lower in the post:
+## Blog and social
 
-- `launch/assets/poster/umbra-launch-poster.png`
-- `launch/assets/screenshots/stackoverflow-questions.png`
-- `launch/assets/screenshots/chrome-developers-permissions.png`
+Use `04-blog-and-social.md` as the copy source and `umbra-launch-poster.png` as the lead image. Include one or two real-site screenshots in the blog. Do not describe the extension as live until the store listing is public and checked from a signed-out browser.
 
-Keep the post short. The important idea is that Umbra keeps the live page intact.
-
-## X And LinkedIn
-
-Use the X thread and LinkedIn post from `docs/04-blog-and-social.md`. For X, attach:
-
-- Post 1: `launch/assets/poster/umbra-launch-poster.png`
-- Post 3 or 4: one real screenshot from `launch/assets/screenshots/`
-
-For LinkedIn, attach the poster and include one screenshot in the comments if needed.
-
-## Verification Before Posting
-
-Run:
+## Verification
 
 ```bash
 npm run lint
@@ -52,12 +29,14 @@ npm test
 npm run test:e2e
 npm run validate
 npm run package:extension
-python3 /Users/jaski/.codex/skills/no-ai-slop/scripts/check_prose.py launch/README.md launch/docs/*.md umbra-extension/docs/STORE_LISTING.md
+python3 /Users/jaski/.codex/skills/no-ai-slop/scripts/check_prose.py README.md launch/README.md launch/docs/*.md umbra-extension/README.md umbra-extension/PRIVACY.md umbra-extension/docs/*.md
 ```
 
-Check manually:
+Manual checks:
 
-- The screenshots are current and readable at social preview size.
-- Store copy matches the shipped extension.
-- No post claims that Umbra improves comprehension, productivity, or accessibility outcomes beyond what we have tested.
-- Links point to the live Chrome Web Store listing, once available.
+- Test ChatGPT, X, GitHub Issues, Stack Overflow, a long article, and a documentation page.
+- Confirm that switching blocks has no blank frame or square-corner flash.
+- Confirm that Choose an area pins the block clicked by the user.
+- Confirm that pause survives a page reload in the same tab.
+- Review the poster and store tile at half size.
+- Open every public link.

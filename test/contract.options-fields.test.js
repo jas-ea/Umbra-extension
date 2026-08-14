@@ -61,16 +61,18 @@ describe("settings contract", () => {
     const fields = parseFields(optionsSource);
     const controls = parseFormControlIds(optionsHtml).sort();
 
-    expect(controls).toEqual([...fields, "siteOverrides"].sort());
-    assertEngineReads([...fields, "siteOverrides"], contentSource);
+    expect(controls).toEqual([...fields, "automaticFocus"].sort());
+    assertEngineReads(
+      [...fields, "autoOnHover", "autoOnScroll", "siteOverrides"],
+      contentSource,
+    );
   });
 
   it("keeps popup settings controls backed by engine reads", () => {
     const popupSettingMap = {
       enabledToggle: "enabled",
-      siteModeAuto: "siteOverrides",
-      siteModeManual: "siteOverrides",
-      siteModeOff: "siteOverrides",
+      darknessSlider: "overlayOpacity",
+      siteModeSelect: "siteOverrides",
     };
 
     for (const id of Object.keys(popupSettingMap)) {

@@ -1,5 +1,34 @@
 # Changelog
 
+## 2.5.0
+
+- Replaced the conflicting hover cooldowns with a deterministic incumbent/challenger focus coordinator.
+- Set automatic focus to a 1-second first dwell and a 1.45-second refocus dwell on one stable surface.
+- Added collection-level targeting for Gmail inboxes, Calendar grids, and Slack conversations.
+- Added immediate suspension for menus, popovers, dialogs, dragging, and fullscreen.
+- Preserved pinned and manual focus across menus, dragging, fullscreen, tab visibility changes, and exit-grace re-entry.
+- Added per-video ownership, muted-autoplay rejection, and picture-in-picture return behavior.
+- Added dense productivity, nested-menu, media, fullscreen, visibility, and timing browser coverage.
+
+## 2.4.0
+
+- Increased the default surrounding darkness from 52% to 74%.
+- Added a live surroundings control to the popup.
+- Replaced the popup overflow menu with visible site, pause, and settings controls.
+- Reduced Settings to automatic focus, outline, site preferences, shortcuts, and reset.
+- Made settings save as they change and replaced raw site rules with a readable list.
+
+## 2.3.0
+
+- Rebuilt hover acquisition so movement across an element does not count as a settled dwell.
+- Kept the active cutout visible while confirming the next block and moved the mask and outline from one interpolated rectangle.
+- Clipped focus geometry against nested scrollports and the viewport, with rounded corners only on exposed edges.
+- Tightened chat, feed, issue-list, question-list, documentation, and article profiles so content blocks beat broad page shells and utility controls.
+- Added direct area selection, truthful action responses, session-persistent tab pause, and same-page startup recovery.
+- Replaced the popup with one context-sensitive primary action and an overflow menu for site mode, tab pause, and Settings.
+- Replaced the former aperture identity with the Index Shift mark and rebuilt the store tile, launch poster, listing copy, and launch documents.
+- Added browser contracts for stable dwell, clicked-control handoff, direct selection, profile matching, and mask-outline alignment.
+
 ## 2.2.2
 
 - Tuned the default focus corner radius down to a cleaner, slightly rounded shape.

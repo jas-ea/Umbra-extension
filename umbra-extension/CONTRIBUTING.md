@@ -43,13 +43,14 @@ When adding or fixing a site profile:
 3. Identify shell elements that should never win.
 4. Update the profile with the smallest possible rule set:
    - `match`
+   - `defaultMode`
    - `intent`
    - `quickSelectors`
-     - `preferSelectors`
-     - `surfaceSelectors`
-     - `rejectSelectors`
-     - `rejectTokens`
-     - `fallbackSelectors`
+   - `preferSelectors`
+   - `surfaceSelectors`
+   - `rejectSelectors`
+   - `rejectTokens`
+   - `fallbackSelectors`
 5. Test at least two distinct pages on that site.
 6. Add a short changelog entry.
 

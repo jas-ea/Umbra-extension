@@ -1,5 +1,5 @@
 <!doctype html>
-<html>
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -9,48 +9,56 @@
   <body>
     <main class="popup">
       <header class="topbar">
-        <div class="brandmark" aria-hidden="true"></div>
-        <div class="title">
-          <h1>Umbra</h1>
-          <p id="subtitle">Focus for this page</p>
-        </div>
-        <label class="switch" title="Enable Umbra">
+        <img class="brandmark" src="icons/icon32.png" alt="" />
+        <h1>Umbra</h1>
+        <label class="switch" title="Turn Umbra on or off">
           <input type="checkbox" id="enabledToggle" />
-          <span class="slider"></span>
+          <span class="slider" aria-hidden="true"></span>
+          <span class="sr-only">Turn Umbra on or off</span>
         </label>
       </header>
 
-      <section class="site-panel">
-        <div class="site-head">
-          <span class="label">Current site</span>
+      <section class="page-state" aria-live="polite">
+        <div class="site-line">
+          <span class="status-dot" id="statusDot" aria-hidden="true"></span>
           <strong id="hostname">Current page</strong>
         </div>
-        <div class="status-row">
-          <span class="badge" id="siteState">Checking</span>
-          <span class="badge muted" id="siteModeBadge">Auto</span>
+        <p id="siteState">Getting ready</p>
+      </section>
+
+      <button id="primaryAction" class="primary" disabled>Getting ready</button>
+
+      <section class="darkness-control" aria-labelledby="darknessLabel">
+        <div class="control-heading">
+          <label id="darknessLabel" for="darknessSlider">Surroundings</label>
+          <output id="darknessValue" for="darknessSlider">74%</output>
+        </div>
+        <input
+          id="darknessSlider"
+          type="range"
+          min="0.45"
+          max="0.9"
+          step="0.01"
+          aria-label="Surrounding darkness"
+        />
+        <div class="range-labels" aria-hidden="true">
+          <span>Lighter</span>
+          <span>Darker</span>
         </div>
       </section>
 
-      <section class="actions-grid">
-        <button id="focusNow" class="primary">Focus</button>
-        <button id="pinNow" class="secondary">Pin</button>
-        <button id="pauseTab" class="secondary wide">Pause tab</button>
-      </section>
+      <label class="site-control" for="siteModeSelect">
+        <span>On this site</span>
+        <select id="siteModeSelect">
+          <option value="auto">Automatic</option>
+          <option value="manual">On request</option>
+          <option value="off">Off</option>
+        </select>
+      </label>
 
-      <details class="site-controls" id="siteControls">
-        <summary>
-          <span>Site behavior</span>
-          <strong id="siteModeText">Auto</strong>
-        </summary>
-        <div class="mode-grid" role="group" aria-label="Site behavior">
-          <button id="siteModeAuto" class="secondary mode-btn">Auto</button>
-          <button id="siteModeManual" class="secondary mode-btn">Manual</button>
-          <button id="siteModeOff" class="secondary mode-btn">Off</button>
-        </div>
-      </details>
-
-      <footer class="footer">
-        <button id="openOptions" class="linklike">Settings</button>
+      <footer class="footer-actions">
+        <button id="pauseTab" class="secondary">Pause tab</button>
+        <button id="openOptions" class="plain">Settings</button>
       </footer>
     </main>
     <script src="defaults.js"></script>
