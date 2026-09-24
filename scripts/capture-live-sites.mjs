@@ -1,3 +1,4 @@
+/* global document */
 import { chromium } from "@playwright/test";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
@@ -19,6 +20,7 @@ const captures = [
     url: "https://en.wikipedia.org/wiki/Cassini%E2%80%93Huygens",
     selector: ".mw-parser-output section > p",
     index: 1,
+    useTextBounds: true,
   },
   {
     name: "github-openai-cookbook-issues.png",
@@ -39,7 +41,6 @@ const captures = [
 async function spotlightRect(page) {
   return page.evaluate(() => {
     // This function runs in the captured page, not in Node.
-    // eslint-disable-next-line no-undef
     const host = document.getElementById("umbra-overlay-host");
     const shell = host?.shadowRoot?.querySelector(".shell");
     const mask = host?.shadowRoot?.querySelector(".mask");
@@ -66,8 +67,10 @@ function spotlightCoversTarget(spotlight, target, tolerance = 5) {
 
 async function waitForSpotlight(page, target) {
   const deadline = Date.now() + 6000;
+  let lastRect = null;
   while (Date.now() < deadline) {
     const rect = await spotlightRect(page);
+    lastRect = rect;
     if (
       rect?.width > 40 &&
       rect?.height > 24 &&
@@ -77,7 +80,26 @@ async function waitForSpotlight(page, target) {
     }
     await page.waitForTimeout(100);
   }
-  throw new Error(`Umbra did not focus the intended block on ${page.url()}`);
+  const diagnostics = await page.evaluate((targetRect) => {
+    const host = document.getElementById("umbra-overlay-host");
+    const shell = host?.shadowRoot?.querySelector(".shell");
+    const mask = host?.shadowRoot?.querySelector(".mask");
+    const point = {
+      x: Math.round(targetRect.x + targetRect.width / 2),
+      y: Math.round(targetRect.y + targetRect.height / 2),
+    };
+    const underPoint = document.elementFromPoint(point.x, point.y);
+    return {
+      hasOverlay: !!host,
+      shellVisible: shell?.classList.contains("visible") || false,
+      maskVisible: mask?.classList.contains("visible") || false,
+      centerTag: underPoint?.tagName || "",
+      centerRole: underPoint?.getAttribute?.("role") || "",
+    };
+  }, target);
+  throw new Error(
+    `Umbra did not focus the intended block on ${page.url()}: ${JSON.stringify({ target, lastRect, diagnostics })}`,
+  );
 }
 
 async function dismissKnownPrompts(page, labels = []) {
@@ -95,25 +117,6 @@ async function dismissKnownPrompts(page, labels = []) {
       await control.waitFor({ state: "hidden", timeout: 3000 }).catch(() => {});
     }
   }
-}
-
-async function beginDirectSelection(context, page) {
-  const worker =
-    context.serviceWorkers()[0] ||
-    (await context.waitForEvent("serviceworker"));
-  const started = await worker.evaluate(async (pageUrl) => {
-    // This function runs inside the extension service worker.
-    /* global chrome */
-    const tabs = await chrome.tabs.query({});
-    const tab = tabs.find((candidate) => candidate.url === pageUrl);
-    if (!tab?.id) return false;
-    const response = await chrome.tabs.sendMessage(tab.id, {
-      type: "UMBRA_BEGIN_PICK",
-    });
-    return !!response?.ok;
-  }, page.url());
-  if (!started)
-    throw new Error(`Umbra could not choose an area on ${page.url()}`);
 }
 
 await mkdir(outputPath, { recursive: true });
@@ -144,16 +147,25 @@ for (const [captureIndex, capture] of captures.entries()) {
 
       const target = page.locator(capture.selector).nth(capture.index || 0);
       await target.scrollIntoViewIfNeeded();
-      const box = await target.boundingBox();
+      let box = await target.boundingBox();
       if (!box) throw new Error(`Target is not visible: ${capture.selector}`);
+      if (capture.useTextBounds) {
+        box = await target.evaluate((element) => {
+          const range = document.createRange();
+          range.selectNodeContents(element);
+          const rect = range.getBoundingClientRect();
+          return {
+            x: rect.x,
+            y: rect.y,
+            width: rect.width,
+            height: rect.height,
+          };
+        });
+      }
 
-      await beginDirectSelection(context, page);
+      await page.mouse.move(4, 4);
+      await page.waitForTimeout(120);
       await page.mouse.move(
-        box.x + box.width * (capture.pointX || 0.5),
-        box.y + box.height / 2,
-      );
-      await page.waitForTimeout(80);
-      await page.mouse.click(
         box.x + box.width * (capture.pointX || 0.5),
         box.y + box.height / 2,
       );

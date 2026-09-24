@@ -12,14 +12,17 @@ A profile is a plain object in `site-profiles.js`.
   label: "Gmail",
   intent: "workspace",
   defaultMode: "auto",
+  strictTargeting: true,
   match: ({ host }) =>
     host === "mail.google.com" || host.endsWith(".mail.google.com"),
   quickSelectors: ["tr.zA", ".ii.gt"],
   preferSelectors: ["tr.zA", ".ii.gt", ".a3s"],
   surfaceSelectors: ["tr.zA", ".ii.gt", ".a3s"],
-  collectionSelectors: ['[role="main"] [role="grid"]'],
-  detailSelectors: [".ii.gt", ".a3s"],
-  rejectSelectors: ['[role="search"]'],
+  collectionSelectors: ["table.F.cf.zt", '[role="main"] [role="grid"]'],
+  collectionItemSelectors: ["tr.zA", '[role="main"] [role="row"]'],
+  detailSelectors: [".a3s", ".ii.gt", ".adn.ads"],
+  localSelectors: ["p", "li", "pre", "table"],
+  rejectSelectors: ['[role="search"]', '[role="toolbar"]'],
   rejectTokens: ["sidebar", "toolbar", "search"],
   fallbackSelectors: [".ii.gt", "tr.zA"],
 }
@@ -48,8 +51,14 @@ Selectors that identify explicit content units and protect those units from broa
 `collectionSelectors`
 Selectors for scan surfaces such as an inbox, calendar grid, or conversation pane. Descendants are promoted to this container during automatic focus.
 
+`collectionItemSelectors`
+Selectors for descendants that are allowed to promote ownership to a collection. Use these with `strictTargeting` when toolbars or category controls sit inside the collection shell.
+
 `detailSelectors`
 Selectors for opened or readable detail content. Detail matches take precedence over a surrounding collection.
+
+`localSelectors`
+Readable descendants used when a declared surface is taller than the viewport. Use this for long chat turns and threaded discussions; do not use it to split ordinary posts into fragments.
 
 `rejectSelectors`
 Selectors that should be treated as app chrome or layout shell.
@@ -59,6 +68,15 @@ Class or id fragments that strongly suggest non-reading chrome.
 
 `fallbackSelectors`
 Last-resort selectors used when the normal pass fails.
+
+`strictTargeting`
+Abstains when the pointer is not on a declared detail, collection item, media surface, or editable region. Use it for applications where generic fallback would select app chrome.
+
+## Page mapping
+
+Umbra builds an ephemeral map of profile surfaces after initial DOM quiet and rebuilds it after significant page changes. This avoids querying every profile selector on each mouse event and lets delayed pages move from the generic profile to a stronger content profile after hydration.
+
+The map is document-local. Do not add page text, URLs, class names, or pointer history to it, and do not persist learned selectors.
 
 ## When to add a profile
 
@@ -77,6 +95,8 @@ Good profile candidates:
 - Reddit threads
 - Hacker News comment pages
 - long-form blogging platforms
+
+The built-in set covers ChatGPT, Claude, Gemini, Grok, Gmail, Calendar, Slack, Discord, X, Instagram, LinkedIn, Reddit, YouTube, GitHub Issues, Stack Overflow, Hacker News, Wikipedia, Chrome Developers, Substack, and common market tables.
 
 ## Default modes
 

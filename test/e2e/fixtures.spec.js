@@ -20,6 +20,7 @@ const fastSettings = {
   transitionMs: 0,
   stationaryTolerance: 10,
   pointerQuietMs: 30,
+  pointerExitMs: 100,
   revealBuffer: 44,
   hideGraceMs: 0,
   noTargetHoldMs: 400,
@@ -135,7 +136,11 @@ async function shellInfo(page) {
       ariaHidden: host.getAttribute("aria-hidden"),
       maskVisible: mask?.classList.contains("visible") || false,
       maskFill: maskPath ? getComputedStyle(maskPath).fill : "",
+      maskFillOpacity: maskPath
+        ? Number(getComputedStyle(maskPath).fillOpacity)
+        : 0,
       maskPath: maskPath?.getAttribute("d") || "",
+      transitionDuration: style.transitionDuration,
     };
   });
 }
@@ -309,6 +314,12 @@ test.describe("Umbra extension fixtures", () => {
     await expect
       .poll(async () => (await extensionState(context, page))?.profile)
       .toBe("chatgpt");
+    await expect
+      .poll(
+        async () =>
+          (await extensionState(context, page))?.surfaceMap?.entries || 0,
+      )
+      .toBeGreaterThan(0);
     const target = await focusByHover(page, "#assistant-message-one", {
       waitForRect: true,
     });
@@ -340,6 +351,39 @@ test.describe("Umbra extension fixtures", () => {
     expect(
       Math.abs(secondShell.top - (composer.y - fastSettings.paddingY)),
     ).toBeGreaterThan(30);
+    await page.close();
+  });
+
+  test("uses a local reading block inside an oversized ChatGPT turn", async () => {
+    const page = await context.newPage();
+    await page.goto(`${server.chatgptOrigin}/noisy-chat-app.html`);
+    const target = await focusByHover(page, "#long-turn-target", {
+      waitForRect: true,
+    });
+    const shell = await shellInfo(page);
+
+    expect(await activeSurfaceId(context, page)).toBe("long-turn-target");
+    expectRectCoversElement(shell, target);
+    expect(shell.borderRadius).toBe("18px");
+    expect((shell.maskPath.match(/A18 18/g) || []).length).toBe(4);
+    await page.close();
+  });
+
+  test("lets manual selection pin a useful region inside rejected app chrome", async () => {
+    const page = await context.newPage();
+    await page.goto(`${server.chatgptOrigin}/noisy-chat-app.html`);
+    await sendExtensionMessage(context, page, { type: "UMBRA_BEGIN_PICK" });
+    const thread = page.locator("nav .thread").nth(1);
+    await thread.hover();
+    await thread.click();
+
+    await expect
+      .poll(async () => (await extensionState(context, page))?.pinned || false)
+      .toBe(true);
+    const shell = await shellInfo(page);
+    const target = await thread.boundingBox();
+    expect(shell.maskVisible).toBe(true);
+    expectRectCoversElement(shell, target, 12);
     await page.close();
   });
 
@@ -927,6 +971,39 @@ test.describe("Umbra extension fixtures", () => {
     await page.close();
   });
 
+  test("reclassifies a delayed page after its article hydrates", async () => {
+    const page = await context.newPage();
+    await page.goto(`${server.origin}/generic-cards.html`);
+    await expect
+      .poll(async () => (await extensionState(context, page))?.profile)
+      .toBe("generic");
+
+    await page.evaluate(() => {
+      const article = document.createElement("article");
+      article.id = "hydrated-article";
+      article.innerHTML =
+        "<h2>Hydrated report</h2><p>This article arrived after the application shell mounted.</p><p>Umbra should rebuild its local page map and use article targeting.</p>";
+      Object.assign(article.style, {
+        background: "white",
+        border: "1px solid #d7dde3",
+        padding: "24px",
+      });
+      document.querySelector("main").prepend(article);
+    });
+
+    await expect
+      .poll(async () => (await extensionState(context, page))?.profile)
+      .toBe("article-default");
+    await expect
+      .poll(
+        async () =>
+          (await extensionState(context, page))?.surfaceMap?.profileId || "",
+      )
+      .toBe("article-default");
+    await focusByHover(page, "#hydrated-article");
+    await page.close();
+  });
+
   test("manual focus and pin use the viewport when pointer state is stale", async () => {
     const page = await context.newPage();
     await page.goto(`${server.origin}/article.html`);
@@ -1002,6 +1079,44 @@ test.describe("Umbra extension fixtures", () => {
     await popup.close();
   });
 
+  test("updates visible surrounding darkness without reloading the page", async () => {
+    const page = await context.newPage();
+    await page.goto(`${server.origin}/article.html`);
+    await focusByHover(page, "#target-article");
+    await updateExtensionSettings(context, { overlayOpacity: 0.86 });
+
+    await expect
+      .poll(async () => (await shellInfo(page))?.maskFillOpacity)
+      .toBe(0.86);
+    expect((await shellInfo(page)).maskVisible).toBe(true);
+    await page.close();
+  });
+
+  test("turns every automatic acquisition path off while keeping manual focus available", async () => {
+    const page = await context.newPage();
+    await setExtensionSettings(context, {
+      autoOnHover: false,
+      autoOnScroll: false,
+    });
+    await page.goto(`${server.origin}/article.html`);
+    await page.locator("#target-article").hover();
+    await page.waitForTimeout(fastSettings.dwellMs + 120);
+
+    expect((await shellInfo(page))?.maskVisible || false).toBe(false);
+    expect((await extensionState(context, page))?.autoBlockedReason).toBe(
+      "automatic-off",
+    );
+
+    const response = await sendExtensionMessage(context, page, {
+      type: "UMBRA_FOCUS_NOW",
+    });
+    expect(response?.ok).toBe(true);
+    await expect
+      .poll(async () => (await shellInfo(page))?.maskVisible || false)
+      .toBe(true);
+    await page.close();
+  });
+
   test("keeps settings small and resets individual site choices", async () => {
     await updateExtensionSettings(context, {
       siteOverrides: { "x.com": "off" },
@@ -1032,11 +1147,17 @@ test.describe("Umbra extension fixtures", () => {
     await page.close();
   });
 
-  test("keeps the current cutout visible while confirming a new block", async () => {
+  test("retires the old cutout before confirming a new block", async () => {
     const page = await context.newPage();
-    await setExtensionSettings(context, { dwellMs: 900, transitionMs: 180 });
+    await setExtensionSettings(context, {
+      dwellMs: 300,
+      refocusDwellMs: 700,
+      pointerExitMs: 100,
+      hideGraceMs: 40,
+      transitionMs: 180,
+    });
     await page.goto(`${server.chatgptOrigin}/noisy-chat-app.html`);
-    const first = await focusByHover(page, "#assistant-message-one", {
+    await focusByHover(page, "#assistant-message-one", {
       waitForRect: true,
     });
     const second = await page.locator("#assistant-message-two").boundingBox();
@@ -1044,13 +1165,12 @@ test.describe("Umbra extension fixtures", () => {
       second.x + second.width / 2,
       second.y + second.height / 2,
     );
-    await page.waitForTimeout(80);
+    await page.waitForTimeout(220);
 
     const duringHandoff = await shellInfo(page);
-    expect(duringHandoff.visible).toBe(true);
-    expect(duringHandoff.maskVisible).toBe(true);
-    expect(duringHandoff.maskPath).toContain("A18 18");
-    expectClose(duringHandoff.left, first.x - fastSettings.paddingX, 5);
+    expect(duringHandoff.visible).toBe(false);
+    expect(duringHandoff.maskVisible).toBe(false);
+    expect(await activeSurfaceId(context, page)).toBe("assistant-message-one");
 
     await expect
       .poll(async () => {
@@ -1058,6 +1178,69 @@ test.describe("Umbra extension fixtures", () => {
         return rectCoversElement(shell, second, 5);
       })
       .toBe(true);
+    await page.close();
+  });
+
+  test("releases rejected chrome inside the incumbent and restores on return", async () => {
+    const page = await context.newPage();
+    await setExtensionSettings(context, {
+      dwellMs: 300,
+      pointerExitMs: 90,
+      hideGraceMs: 30,
+      noTargetHoldMs: 700,
+    });
+    await page.goto(`${server.chatgptOrigin}/noisy-chat-app.html`);
+    await focusByHover(page, "#assistant-message-one", { waitForRect: true });
+
+    await page
+      .locator("#assistant-message-one .toolbar button")
+      .first()
+      .hover();
+    await page.waitForTimeout(180);
+    expect((await shellInfo(page)).maskVisible).toBe(false);
+    expect(await activeSurfaceId(context, page)).toBe("assistant-message-one");
+
+    const message = await page.locator("#assistant-message-one p").first();
+    await message.hover();
+    await page.waitForTimeout(60);
+    expect((await shellInfo(page)).maskVisible).toBe(true);
+    expect(await activeSurfaceId(context, page)).toBe("assistant-message-one");
+    await page.close();
+  });
+
+  test("releases automatic focus when the pointer leaves the viewport", async () => {
+    const page = await context.newPage();
+    await page.goto(`${server.chatgptOrigin}/noisy-chat-app.html`);
+    await focusByHover(page, "#assistant-message-one", { waitForRect: true });
+
+    await page.evaluate(() => {
+      window.dispatchEvent(
+        new MouseEvent("mouseout", { bubbles: true, relatedTarget: null }),
+      );
+    });
+    await expect
+      .poll(async () => (await shellInfo(page))?.maskVisible || false)
+      .toBe(false);
+    expect((await extensionState(context, page))?.hasActiveSurface).toBe(false);
+    await page.close();
+  });
+
+  test("recognizes nested SVG controls before they suspend focus", async () => {
+    const page = await context.newPage();
+    await page.goto(`${server.chatgptOrigin}/noisy-chat-app.html`);
+    await focusByHover(page, "#assistant-message-one", { waitForRect: true });
+    await page
+      .locator("main header button")
+      .first()
+      .evaluate((button) => {
+        button.innerHTML =
+          '<svg viewBox="0 0 16 16" width="16" height="16"><circle id="nested-control-path" cx="8" cy="8" r="6" fill="currentColor"/></svg>';
+      });
+
+    await page.locator("#nested-control-path").click();
+    await expect
+      .poll(async () => (await shellInfo(page))?.maskVisible || false)
+      .toBe(false);
     await page.close();
   });
 

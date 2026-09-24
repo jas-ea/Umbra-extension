@@ -4,7 +4,7 @@
     dwellMs: 1000,
     refocusDwellMs: 1450,
     scrollIdleMs: 650,
-    overlayOpacity: 0.74,
+    overlayOpacity: 0.8,
     dimTint: "#000000",
     edgeFeather: 0,
     solidDim: false,
@@ -15,6 +15,7 @@
     transitionMs: 160,
     stationaryTolerance: 12,
     pointerQuietMs: 240,
+    pointerExitMs: 180,
     revealBuffer: 44,
     readingBandY: 0.42,
     hideGraceMs: 90,
@@ -39,7 +40,8 @@
     "refocus" + "CooldownMs",
   ]);
   const MAX_SITE_OVERRIDES = 120;
-  const VISUAL_DEFAULTS_VERSION = 1;
+  const VISUAL_DEFAULTS_VERSION = 2;
+  const LEGACY_VISUAL_DEFAULT_OPACITIES = Object.freeze([0.52, 0.74]);
   const BEHAVIOR_DEFAULTS_VERSION = 1;
   const BEHAVIOR_DEFAULT_KEYS = Object.freeze([
     "dwellMs",
@@ -47,6 +49,7 @@
     "scrollIdleMs",
     "stationaryTolerance",
     "pointerQuietMs",
+    "pointerExitMs",
     "noTargetHoldMs",
     "actionLockMs",
     "interactionGraceMs",
@@ -75,7 +78,7 @@
     )) {
       const host = normalizeHost(rawHost);
       const mode = normalizeSiteMode(rawMode);
-      if (host && mode && mode !== "auto") output[host] = mode;
+      if (host && mode) output[host] = mode;
     }
     return output;
   }
@@ -104,7 +107,7 @@
     if (
       (!Number.isFinite(visualDefaultsVersion) ||
         visualDefaultsVersion < VISUAL_DEFAULTS_VERSION) &&
-      Number(items.overlayOpacity) === 0.52
+      LEGACY_VISUAL_DEFAULT_OPACITIES.includes(Number(items.overlayOpacity))
     ) {
       settings.overlayOpacity = DEFAULTS.overlayOpacity;
     }
@@ -142,7 +145,7 @@
       set.visualDefaultsVersion = VISUAL_DEFAULTS_VERSION;
       if (
         !Object.hasOwn(items, "overlayOpacity") ||
-        Number(items.overlayOpacity) === 0.52
+        LEGACY_VISUAL_DEFAULT_OPACITIES.includes(Number(items.overlayOpacity))
       ) {
         set.overlayOpacity = DEFAULTS.overlayOpacity;
       }
@@ -175,6 +178,8 @@
       return { text: "OFF", color: "#9aa0a6" };
     if (state.pausedForTab) return { text: "II", color: "#f5a623" };
     if (state.siteMode === "off") return { text: "OFF", color: "#9aa0a6" };
+    if (state.autoBlockedReason === "automatic-off")
+      return { text: "M", color: "#5b8def" };
     if (state.siteMode === "manual") return { text: "M", color: "#5b8def" };
     return { text: "", color: "#5b8def" };
   }

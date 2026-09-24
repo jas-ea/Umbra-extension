@@ -9,6 +9,7 @@
     "test": "vitest run",
     "test:e2e": "playwright test",
     "validate": "node scripts/validate-extension.mjs",
+    "render:assets": "swift scripts/render-brand-assets.swift && swift scripts/render-launch-poster.swift",
     "package:extension": "node scripts/package-extension.mjs"
   },
   "devDependencies": {

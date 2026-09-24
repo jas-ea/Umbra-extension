@@ -1,5 +1,5 @@
 (() => {
-  const RUNTIME_VERSION = "2.5.1";
+  const RUNTIME_VERSION = "2.7.0";
   const previousRuntime = globalThis.UMBRA_RUNTIME;
   if (previousRuntime?.version === RUNTIME_VERSION) return;
   if (previousRuntime?.teardown) {
@@ -59,6 +59,24 @@
     ".entry-content",
   ].join(",");
 
+  const LOCAL_READ_SELECTOR = [
+    "p",
+    "blockquote",
+    "pre",
+    "figure",
+    "table",
+    '[role="table"]',
+    "li",
+    "ul",
+    "ol",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+  ].join(",");
+
   const TRANSIENT_INTERACTION_SELECTOR = [
     "dialog[open]",
     '[aria-modal="true"]',
@@ -92,6 +110,9 @@
     activeMode: null,
     pointerX: Math.round(window.innerWidth / 2),
     pointerY: Math.round(window.innerHeight / 2),
+    pointerPresent: false,
+    pointerRafId: 0,
+    pendingPointerTarget: null,
     lastPointerMoveAt: 0,
     lastScrollAt: 0,
     lastInteractionAt: 0,
@@ -105,6 +126,7 @@
     scrollTimer: null,
     lastScrollContainer: null,
     exitTimer: null,
+    ownerExpiryTimer: null,
     hideTimer: null,
     transitionTimer: null,
     actionLockEl: null,
@@ -131,6 +153,13 @@
     motionRafId: 0,
     renderedRect: null,
     mutationRefreshTimer: null,
+    surfaceMapTimer: null,
+    surfaceMap: {
+      profileId: "",
+      generation: 0,
+      builtAt: 0,
+      entries: [],
+    },
     routePollId: null,
     routeCheckTimer: null,
     lastHref: location.href,
@@ -142,7 +171,7 @@
   const storage = chrome.storage.sync;
 
   function log(...args) {
-    if (state.settings.debug) console.log("[Umbra2]", ...args);
+    if (state.settings.debug) console.log("[Umbra]", ...args);
   }
 
   function nowTs() {
@@ -227,7 +256,7 @@
     };
   }
 
-  function currentSiteMode() {
+  function currentSiteOverride() {
     const host = normalizeHost(location.hostname);
     const overrides = state.settings.siteOverrides || {};
     if (overrides[host]) return overrides[host];
@@ -236,7 +265,11 @@
       const suffix = parts.slice(i).join(".");
       if (overrides[suffix]) return overrides[suffix];
     }
-    return state.siteProfile?.defaultMode || "auto";
+    return null;
+  }
+
+  function currentSiteMode() {
+    return currentSiteOverride() || state.siteProfile?.defaultMode || "auto";
   }
 
   function visibleCount(selector) {
@@ -335,7 +368,13 @@
     const mode = currentSiteMode();
     if (mode === "off") return "site-off";
     if (mode === "manual") return "site-manual";
-    if (state.settings.appAutoSuppress && isUtilityLikePage())
+    if (!state.settings.autoOnHover && !state.settings.autoOnScroll)
+      return "automatic-off";
+    if (
+      state.settings.appAutoSuppress &&
+      !currentSiteOverride() &&
+      isUtilityLikePage()
+    )
       return "utility-page";
     return null;
   }
@@ -372,12 +411,13 @@
         height: 100vh;
         pointer-events: none;
         opacity: 0;
-        transition: opacity 90ms ease;
+        transition: opacity var(--umbra-transition, 160ms) ease;
         will-change: opacity;
       }
       .mask.visible { opacity: 1; }
       .mask path {
-        fill: rgba(var(--umbra-dim-rgb, 0,0,0), var(--umbra-opacity,0.58));
+        fill: rgb(var(--umbra-dim-rgb, 0,0,0));
+        fill-opacity: var(--umbra-opacity,0.80);
       }
       .shell {
         position: fixed;
@@ -390,7 +430,7 @@
         border-radius: var(--umbra-radius, 12px);
         border: 1px solid var(--umbra-outline, rgba(255,255,255,0.10));
         box-shadow: 0 0 var(--umbra-edge-feather, 0px) rgba(var(--umbra-dim-rgb, 0,0,0), var(--umbra-opacity,0.58));
-        transition: opacity 90ms ease;
+        transition: opacity var(--umbra-transition, 160ms) ease;
         will-change: left, top, width, height, opacity;
       }
       .shell.visible { opacity: 1; }
@@ -400,17 +440,14 @@
       }
       @media (prefers-reduced-motion: reduce) {
         .shell {
-          transition: opacity 90ms ease;
+          transition: none;
           will-change: opacity;
         }
         .mask {
-          transition: opacity 90ms ease;
+          transition: none;
         }
       }
       @media (prefers-contrast: more) {
-        .mask path {
-          fill: rgba(0,0,0,0.70);
-        }
         .shell {
           border-color: rgba(255,255,255,0.36);
         }
@@ -547,6 +584,12 @@
     state.exitTimer = null;
   }
 
+  function clearOwnerExpiryTimer() {
+    if (!state.ownerExpiryTimer) return;
+    clearTimeout(state.ownerExpiryTimer);
+    state.ownerExpiryTimer = null;
+  }
+
   function cancelSpotlightMotion() {
     cancelAnimationFrame(state.motionRafId);
     state.motionRafId = 0;
@@ -654,6 +697,7 @@
     }
     clearHideTimer();
     clearExitTimer();
+    clearOwnerExpiryTimer();
     state.activeRect = rect;
     if (animate) animateSpotlightTo(rect);
     else {
@@ -664,9 +708,43 @@
     state.visible = true;
   }
 
+  function visualBoundsForElement(el, elementRect) {
+    if (
+      state.activeMode !== "read" ||
+      !["p", "blockquote"].includes(el.tagName?.toLowerCase()) ||
+      el.querySelector?.("img, video, table, figure, pre")
+    ) {
+      return elementRect;
+    }
+    try {
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      const textRect = range.getBoundingClientRect();
+      range.detach?.();
+      const style = getComputedStyle(el);
+      const fontSize = Number.parseFloat(style.fontSize) || 16;
+      const lineHeight =
+        Number.parseFloat(style.lineHeight) || Math.max(20, fontSize * 1.25);
+      const inflatedByAdjacentLayout =
+        elementRect.height >= lineHeight * 3 &&
+        elementRect.width - textRect.width >= 140 &&
+        elementRect.width >= textRect.width * 1.45;
+      const textInsideElement =
+        textRect.width > 120 &&
+        textRect.height > lineHeight * 2 &&
+        textRect.left >= elementRect.left - 2 &&
+        textRect.top >= elementRect.top - 2 &&
+        textRect.right <= elementRect.right + 2 &&
+        textRect.bottom <= elementRect.bottom + 2;
+      if (inflatedByAdjacentLayout && textInsideElement) return textRect;
+    } catch (_) {}
+    return elementRect;
+  }
+
   function rectForElement(el) {
     if (!el || !document.contains(el)) return null;
-    const r = el.getBoundingClientRect();
+    const elementRect = el.getBoundingClientRect();
+    const r = visualBoundsForElement(el, elementRect);
     if (!r.width || !r.height) return null;
     if (
       r.right <= 0 ||
@@ -720,7 +798,7 @@
     bottom = Math.round(bottom);
     const width = right - left;
     const height = bottom - top;
-    if (r.width < 40 || r.height < 28 || width < 40 || height < 28) return null;
+    if (r.width < 40 || r.height < 12 || width < 40 || height < 28) return null;
     if (state.settings.focusMode === "band") {
       const bandHeight = Math.min(
         height,
@@ -780,6 +858,19 @@
     return null;
   }
 
+  function closestMatchingAncestor(node, selectors) {
+    let current = node;
+    while (
+      current &&
+      current !== document.body &&
+      current !== document.documentElement
+    ) {
+      if (matchesAny(current, selectors)) return current;
+      current = current.parentElement;
+    }
+    return null;
+  }
+
   function matchesAny(node, selectors) {
     if (!node || !node.matches) return false;
     return selectorList(selectors).some((selector) => {
@@ -802,8 +893,18 @@
     return tokens.some((token) => str.includes(String(token).toLowerCase()));
   }
 
+  function acceptedBoundaryFrom(node) {
+    return closestMatchingAncestor(node, [
+      ...selectorList(state.siteProfile?.detailSelectors),
+      ...selectorList(state.siteProfile?.surfaceSelectors),
+      ...selectorList(state.siteProfile?.collectionItemSelectors),
+      ...selectorList(state.siteProfile?.collectionSelectors),
+    ]);
+  }
+
   function hasRejectedContext(node) {
     if (closestAny(node, state.siteProfile?.rejectSelectors)) return true;
+    const acceptedBoundary = acceptedBoundaryFrom(node);
     let current = node;
     while (
       current &&
@@ -811,13 +912,14 @@
       current !== document.documentElement
     ) {
       if (matchesAny(current, state.siteProfile?.rejectSelectors)) return true;
+      if (containsRejectToken(current)) return true;
+      if (current === acceptedBoundary) return false;
       if (
         current.tagName?.toLowerCase() === "main" ||
         current.getAttribute?.("role") === "main"
       ) {
         break;
       }
-      if (containsRejectToken(current)) return true;
       current = current.parentElement;
     }
     return false;
@@ -860,6 +962,16 @@
     return !!(el && el.matches && el.matches(INTERACTIVE_SELECTOR));
   }
 
+  function editableFrom(el) {
+    if (!el?.closest) return null;
+    return isEditable(el) ? el : el.closest(EDITABLE_SELECTOR);
+  }
+
+  function interactiveFrom(el) {
+    if (!el?.closest) return null;
+    return isInteractive(el) ? el : el.closest(INTERACTIVE_SELECTOR);
+  }
+
   function repeatedSiblingPattern(el, baseRect = null) {
     const parent = el?.parentElement;
     if (!parent) return 0;
@@ -900,6 +1012,34 @@
       el?.getAttribute?.("role") === "main" ||
       areaRatio > 0.55
     );
+  }
+
+  function localReadingSurfaceFrom(origin, owner) {
+    if (!origin || !owner || !owner.contains(origin)) return null;
+    const ownerRect = owner.getBoundingClientRect();
+    if (ownerRect.height <= window.innerHeight * 1.15) return null;
+
+    const selectors = selectorList(state.siteProfile?.localSelectors);
+    const local = closestMatchingAncestor(origin, [
+      ...(selectors.length ? selectors : [LOCAL_READ_SELECTOR]),
+    ]);
+    if (!local || local === owner || !owner.contains(local)) return null;
+
+    let candidate = local;
+    if (local.matches?.("li")) {
+      const list = local.closest("ul, ol");
+      if (list && owner.contains(list)) candidate = list;
+    }
+    const rect = candidate.getBoundingClientRect();
+    if (
+      !isVisible(candidate, rect) ||
+      rect.width < 120 ||
+      rect.height < 16 ||
+      rect.height > window.innerHeight * 0.88
+    ) {
+      return null;
+    }
+    return candidate;
   }
 
   function pointerPoint() {
@@ -1002,6 +1142,78 @@
     return null;
   }
 
+  function surfaceMapSelectors(profile = state.siteProfile) {
+    return [
+      ...selectorList(profile?.surfaceSelectors),
+      ...selectorList(profile?.detailSelectors),
+      ...selectorList(profile?.collectionSelectors),
+      ...selectorList(profile?.preferSelectors),
+      ...selectorList(profile?.quickSelectors),
+    ].filter((selector, index, list) => list.indexOf(selector) === index);
+  }
+
+  function rebuildSurfaceMap({ reclassify = true } = {}) {
+    let profile = state.siteProfile;
+    let profileChanged = false;
+    if (reclassify) {
+      const nextProfile = resolveSiteProfile();
+      if (nextProfile?.id !== profile?.id) {
+        profileChanged = true;
+        state.siteProfile = nextProfile;
+        profile = nextProfile;
+        if (!state.pinned) {
+          clearHoverResidence();
+          clearObservers();
+          hideOverlay(true);
+        }
+      }
+    }
+
+    const elements = new Set();
+    for (const selector of surfaceMapSelectors(profile)) {
+      try {
+        for (const element of document.querySelectorAll(selector)) {
+          elements.add(element);
+          if (elements.size >= 240) break;
+        }
+      } catch (_) {}
+      if (elements.size >= 240) break;
+    }
+
+    const entries = [];
+    for (const element of elements) {
+      const rect = element.getBoundingClientRect();
+      if (!isVisible(element, rect)) continue;
+      entries.push({ element, rect });
+    }
+    state.surfaceMap = {
+      profileId: profile?.id || "generic",
+      generation: state.surfaceMap.generation + 1,
+      builtAt: nowTs(),
+      entries,
+    };
+    if (profileChanged) {
+      pushRuntimeState();
+      scheduleReacquire();
+    }
+  }
+
+  function scheduleSurfaceMapRefresh(delay = 220, options = {}) {
+    clearTimeout(state.surfaceMapTimer);
+    state.surfaceMapTimer = setTimeout(
+      () => {
+        state.surfaceMapTimer = null;
+        rebuildSurfaceMap(options);
+      },
+      Math.max(80, Number(delay) || 0),
+    );
+  }
+
+  function invalidateSurfaceMap(delay = 220, options = {}) {
+    state.surfaceMap.entries = [];
+    scheduleSurfaceMapRefresh(delay, options);
+  }
+
   function collectCandidatesFromPoint(x, y) {
     const candidates = new Set();
     const base = document.elementFromPoint(x, y);
@@ -1013,30 +1225,19 @@
       node !== document.documentElement
     ) {
       candidates.add(node);
-      const preferred = closestAny(node, state.siteProfile?.surfaceSelectors);
-      if (preferred) candidates.add(preferred);
-      const preferred2 = closestAny(node, state.siteProfile?.preferSelectors);
-      if (preferred2) candidates.add(preferred2);
       node = node.parentElement;
     }
 
-    for (const selector of selectorList(
-      state.siteProfile?.quickSelectors,
-    ).slice(0, 6)) {
-      try {
-        const nearby = document.querySelectorAll(selector);
-        for (const el of nearby) {
-          if (!isVisible(el)) continue;
-          const r = el.getBoundingClientRect();
-          if (
-            x >= r.left - 48 &&
-            x <= r.right + 48 &&
-            y >= r.top - 48 &&
-            y <= r.bottom + 48
-          )
-            candidates.add(el);
-        }
-      } catch (_) {}
+    for (const { element, rect } of state.surfaceMap.entries) {
+      if (!document.contains(element)) continue;
+      if (
+        x >= rect.left - 48 &&
+        x <= rect.right + 48 &&
+        y >= rect.top - 48 &&
+        y <= rect.bottom + 48
+      ) {
+        candidates.add(element);
+      }
     }
     return [...candidates];
   }
@@ -1062,6 +1263,7 @@
     const viewportArea = Math.max(1, window.innerWidth * window.innerHeight);
     const area = Math.max(1, r.width * r.height);
     const areaRatio = area / viewportArea;
+    const heightRatio = r.height / Math.max(1, window.innerHeight);
     const isExplicitSurface = matchesAny(
       el,
       state.siteProfile?.surfaceSelectors,
@@ -1109,6 +1311,7 @@
       if (matchesAny(el, [READ_SURFACE_SELECTOR])) score += 12;
       if (areaRatio >= 0.04 && areaRatio <= 0.42) score += 8;
       if (areaRatio > 0.55) score -= Math.min((areaRatio - 0.55) * 48, 22);
+      if (heightRatio > 1.2) score -= Math.min(36, (heightRatio - 1.2) * 7);
       if (!isExplicitSurface)
         score -= Math.min(readSurfaceChildCount(el) * 10, 40);
       if (isBroadReadContainer(el, areaRatio))
@@ -1133,6 +1336,14 @@
     const origin = document.elementFromPoint(point.x, point.y);
     if (!origin || hasRejectedContext(origin)) return null;
 
+    const direct = closestMatchingAncestor(
+      origin,
+      state.siteProfile?.surfaceSelectors,
+    );
+    if (direct && isVisible(direct) && !hasRejectedContext(direct)) {
+      return localReadingSurfaceFrom(origin, direct) || direct;
+    }
+
     const candidates = collectCandidatesFromPoint(point.x, point.y);
     let best = null;
     let bestScore = -Infinity;
@@ -1148,7 +1359,7 @@
       const fallbackSelectors = selectorList(
         state.siteProfile?.fallbackSelectors,
       );
-      const fallback = closestAny(origin, fallbackSelectors);
+      const fallback = closestMatchingAncestor(origin, fallbackSelectors);
       if (fallback && isVisible(fallback)) best = fallback;
     }
     return best;
@@ -1200,6 +1411,11 @@
   }
 
   function hasRejectedCollectionContext(origin) {
+    if (closestAny(origin, state.siteProfile?.rejectSelectors)) return true;
+    const acceptedBoundary = closestMatchingAncestor(origin, [
+      ...selectorList(state.siteProfile?.collectionItemSelectors),
+      ...selectorList(state.siteProfile?.collectionSelectors),
+    ]);
     let current = origin;
     while (
       current &&
@@ -1212,6 +1428,7 @@
       ) {
         return true;
       }
+      if (current === acceptedBoundary) return false;
       if (
         current.tagName?.toLowerCase() === "main" ||
         current.getAttribute?.("role") === "main"
@@ -1223,9 +1440,46 @@
     return false;
   }
 
+  function inferredCollectionSurfaceFrom(origin) {
+    const intent = state.siteProfile?.intent || "generic";
+    if (!["workspace", "hybrid", "generic"].includes(intent)) return null;
+    let current = origin;
+    while (
+      current &&
+      current !== document.body &&
+      current !== document.documentElement
+    ) {
+      const parent = current.parentElement;
+      if (!parent) break;
+      const repeated = repeatedSiblingPattern(current);
+      const rect = parent.getBoundingClientRect();
+      const areaRatio =
+        (rect.width * rect.height) /
+        Math.max(1, window.innerWidth * window.innerHeight);
+      if (
+        repeated >= 4 &&
+        isVisible(parent, rect) &&
+        rect.width >= 220 &&
+        rect.height >= 120 &&
+        areaRatio <= 0.82 &&
+        !hasRejectedCollectionContext(current)
+      ) {
+        return parent;
+      }
+      if (
+        current.tagName?.toLowerCase() === "main" ||
+        current.getAttribute?.("role") === "main"
+      ) {
+        break;
+      }
+      current = parent;
+    }
+    return null;
+  }
+
   function collectionSurfaceFrom(origin) {
     if (!origin?.closest || hasRejectedCollectionContext(origin)) return null;
-    const collectionItem = closestAny(
+    const collectionItem = closestMatchingAncestor(
       origin,
       state.siteProfile?.collectionItemSelectors,
     );
@@ -1240,7 +1494,7 @@
     ) {
       return null;
     }
-    const explicit = closestAny(
+    const explicit = closestMatchingAncestor(
       collectionItem || origin,
       state.siteProfile?.collectionSelectors,
     );
@@ -1254,11 +1508,14 @@
     ) {
       return semantic;
     }
-    return null;
+    return inferredCollectionSurfaceFrom(origin);
   }
 
   function detailSurfaceFrom(origin) {
-    const detail = closestAny(origin, state.siteProfile?.detailSelectors);
+    const detail = closestMatchingAncestor(
+      origin,
+      state.siteProfile?.detailSelectors,
+    );
     return detail && isVisible(detail) ? detail : null;
   }
 
@@ -1346,11 +1603,91 @@
     return { surface, mode: family, origin };
   }
 
-  function directSurfaceFromPointer(family, sourceEl) {
-    if (!sourceEl || hasRejectedContext(sourceEl)) return null;
-    const explicit = closestAny(sourceEl, state.siteProfile?.surfaceSelectors);
-    if (explicit && isVisible(explicit)) return explicit;
-    return nearestSurfaceFromPointer(family, sourceEl);
+  function manualCandidateScore(el, point) {
+    if (
+      !el ||
+      el === document.body ||
+      el === document.documentElement ||
+      !document.contains(el)
+    ) {
+      return -Infinity;
+    }
+    if (transientInteractionFrom(el)) return -Infinity;
+    const style = getComputedStyle(el);
+    const rect = el.getBoundingClientRect();
+    if (!isVisible(el, rect, style)) return -Infinity;
+
+    const viewportArea = Math.max(1, window.innerWidth * window.innerHeight);
+    const areaRatio = (rect.width * rect.height) / viewportArea;
+    if (rect.width < 80 || rect.height < 24 || areaRatio > 0.96)
+      return -Infinity;
+
+    let score = pointInsideRect(point.x, point.y, rect) ? 18 : 0;
+    if (matchesAny(el, state.siteProfile?.surfaceSelectors)) score += 28;
+    if (matchesAny(el, state.siteProfile?.detailSelectors)) score += 28;
+    if (matchesAny(el, state.siteProfile?.collectionSelectors)) score += 24;
+    if (
+      el.matches?.(
+        'article, main, section, [role="article"], [role="main"], [role="region"], [role="list"], [role="grid"], [role="tree"], table, ul, ol, canvas',
+      )
+    ) {
+      score += 12;
+    }
+    if (isInteractive(el)) score -= 26;
+    if (el.matches?.("p, span, strong, small")) score -= 8;
+    if (el.matches?.("nav, aside, header, footer")) score -= 10;
+    if (style.position === "fixed" || style.position === "sticky") score -= 8;
+    const textLen = (el.textContent || "").trim().length;
+    score += Math.min(textLen / 120, 14);
+    if (areaRatio >= 0.004 && areaRatio <= 0.68)
+      score += 16 - Math.min(areaRatio * 24, 12);
+    if (areaRatio > 0.82) score -= 24;
+    if (areaRatio < 0.003) score -= 14;
+    score -=
+      Math.min(
+        el.querySelectorAll?.('button, [role="button"], input, textarea')
+          .length || 0,
+        30,
+      ) * 0.35;
+    return score;
+  }
+
+  function directSurfaceFromPointer(family, sourceEl, point = pointerPoint()) {
+    if (!sourceEl) return null;
+    const directMedia = mediaSurfaceFrom(sourceEl);
+    if (directMedia) return directMedia;
+    const collection = collectionSurfaceFrom(sourceEl);
+    if (collection) return collection;
+
+    const explicit = closestMatchingAncestor(sourceEl, [
+      ...selectorList(state.siteProfile?.detailSelectors),
+      ...selectorList(state.siteProfile?.surfaceSelectors),
+    ]);
+    if (explicit && isVisible(explicit)) {
+      return localReadingSurfaceFrom(sourceEl, explicit) || explicit;
+    }
+
+    if (!hasRejectedContext(sourceEl)) {
+      const automatic = nearestSurfaceFromPoint(family, point, sourceEl);
+      if (automatic) return automatic;
+    }
+
+    let best = null;
+    let bestScore = -Infinity;
+    let current = sourceEl;
+    while (
+      current &&
+      current !== document.body &&
+      current !== document.documentElement
+    ) {
+      const score = manualCandidateScore(current, point);
+      if (score > bestScore) {
+        best = current;
+        bestScore = score;
+      }
+      current = current.parentElement;
+    }
+    return bestScore >= 0 ? best : null;
   }
 
   function visibleElementCenter(el) {
@@ -1369,28 +1706,31 @@
   }
 
   function nearestManualSurface(family) {
+    if (state.pointerPresent) {
+      const pointerSurface = directSurfaceFromPointer(
+        family,
+        document.elementFromPoint(state.pointerX, state.pointerY),
+        pointerPoint(),
+      );
+      if (pointerSurface) return { surface: pointerSurface, family };
+    }
+
     const active = document.activeElement;
-    if (isEditable(active) || isInteractive(active)) {
+    if (activeTyping() && (isEditable(active) || isInteractive(active))) {
       const surface = findInteractionShell(active);
       if (surface && isVisible(surface))
         return { surface, family: isEditable(active) ? "create" : "act" };
     }
 
-    const activePoint = visibleElementCenter(active);
-    if (activePoint) {
-      const activeSurface = nearestSurfaceFromPoint(
-        family,
-        activePoint,
-        active,
-      );
-      if (activeSurface) return { surface: activeSurface, family };
-    }
-
-    const bandSurface = nearestSurfaceFromPoint(family, readingBandPoint());
+    const bandPoint = readingBandPoint();
+    const bandOrigin = document.elementFromPoint(bandPoint.x, bandPoint.y);
+    const bandSurface = directSurfaceFromPointer(family, bandOrigin, bandPoint);
     if (bandSurface) return { surface: bandSurface, family };
 
-    const pointerSurface = nearestSurfaceFromPointer(family);
-    return pointerSurface ? { surface: pointerSurface, family } : null;
+    const activePoint = visibleElementCenter(active);
+    if (!activePoint) return null;
+    const activeSurface = directSurfaceFromPointer(family, active, activePoint);
+    return activeSurface ? { surface: activeSurface, family } : null;
   }
 
   function activeTyping() {
@@ -1508,6 +1848,11 @@
       scheduleReacquire();
       return;
     }
+    if (!state.pinned && hasRejectedContext(state.activeSurface)) {
+      clearActiveOwnership();
+      scheduleReacquire();
+      return;
+    }
     const rect = rectForElement(state.activeSurface);
     if (!rect) {
       hideOverlay(true);
@@ -1545,20 +1890,27 @@
     clearTimeout(state.hoverTimer);
     clearTimeout(state.scrollTimer);
     clearTimeout(state.exitTimer);
+    clearTimeout(state.ownerExpiryTimer);
     clearTimeout(state.transitionTimer);
     clearTimeout(state.mutationRefreshTimer);
+    clearTimeout(state.surfaceMapTimer);
     clearTimeout(state.routeCheckTimer);
     clearInterval(state.routePollId);
     clearHideTimer();
     cancelAnimationFrame(state.rafId);
+    cancelAnimationFrame(state.pointerRafId);
     cancelSpotlightMotion();
     state.hoverTimer = state.scrollTimer = state.transitionTimer = null;
     state.hoverHint = null;
     state.hoverMode = null;
     state.exitTimer = null;
+    state.ownerExpiryTimer = null;
+    state.surfaceMapTimer = null;
     state.mutationRefreshTimer = state.routeCheckTimer = null;
     state.routePollId = null;
     state.rafId = 0;
+    state.pointerRafId = 0;
+    state.pendingPointerTarget = null;
   }
 
   function focusDelayFor(target) {
@@ -1581,6 +1933,26 @@
     return target.surface;
   }
 
+  function clearActiveOwnership({ hide = true } = {}) {
+    clearExitTimer();
+    clearOwnerExpiryTimer();
+    state.activeSurface = null;
+    state.activeMode = null;
+    state.pinned = false;
+    clearObservers();
+    focusCoordinator.clear();
+    if (hide) hideOverlay(true);
+  }
+
+  function pointerOwnsSurface(surface = state.activeSurface) {
+    if (!surface || !document.contains(surface) || !state.pointerPresent)
+      return false;
+    const origin = document.elementFromPoint(state.pointerX, state.pointerY);
+    if (origin && surface.contains(origin)) return true;
+    const rect = surface.getBoundingClientRect();
+    return pointInsideRect(state.pointerX, state.pointerY, rect, 6);
+  }
+
   function restoreIncumbent() {
     if (
       !canManualRun() ||
@@ -1590,8 +1962,21 @@
     ) {
       return false;
     }
+    const explicitOwner =
+      state.pinned ||
+      (state.activeMode === "media" &&
+        isStrongPlayingVideo(state.activeMedia)) ||
+      (actionSurfaceShouldWin() &&
+        state.activeSurface.contains(state.actionLockEl));
+    if (!explicitOwner && !pointerOwnsSurface()) {
+      clearActiveOwnership();
+      return false;
+    }
     const rect = rectForElement(state.activeSurface);
-    if (!rect) return false;
+    if (!rect) {
+      clearActiveOwnership();
+      return false;
+    }
     setShellRect(rect);
     return true;
   }
@@ -1618,43 +2003,6 @@
     );
   }
 
-  function acquireSurface(reason) {
-    if (!canAutoRun() || !state.hasUserInteracted || state.pinned) return null;
-
-    let family = pageFamily();
-    let sourceEl = null;
-    let point = pointerPoint();
-
-    if (actionSurfaceShouldWin()) {
-      family = state.actionLockMode || "create";
-      sourceEl = state.actionLockEl;
-    }
-
-    if (reason === "scroll" && !actionSurfaceShouldWin()) {
-      family = pageFamily();
-      sourceEl = null;
-      point = readingBandPoint(state.lastScrollContainer);
-    }
-
-    let target = resolvedTargetFromPoint(family, point, sourceEl, {
-      allowPassiveMedia: false,
-    });
-    if (target?.suspended) {
-      suspendAutomaticFocus();
-      return null;
-    }
-    if (!target && family !== "read") {
-      target = resolvedTargetFromPoint(pageFamily(), point, null, {
-        allowPassiveMedia: false,
-      });
-    }
-    if (!target) {
-      schedulePointerExit();
-      return null;
-    }
-    return commitResolvedTarget(target);
-  }
-
   function clearHoverResidence() {
     clearTimeout(state.hoverTimer);
     state.hoverTimer = null;
@@ -1663,28 +2011,36 @@
     focusCoordinator.resetChallenger();
   }
 
-  function queueHoverAcquire(sourceEl) {
-    if (!canAutoRun() || !state.settings.autoOnHover || state.pinned) return;
-    const target = resolvedTargetFromPoint(
-      pageFamily(),
-      pointerPoint(),
-      sourceEl,
-    );
+  function observeAutomaticTarget(
+    target,
+    { source = "transition", honorPointerQuiet = false } = {},
+  ) {
     if (target?.suspended) {
       suspendAutomaticFocus();
-      return;
+      return null;
     }
     if (!target?.surface) {
       clearHoverResidence();
-      schedulePointerExit();
-      return;
+      schedulePointerExit({ force: true });
+      return null;
     }
-    clearExitTimer();
-    clearHideTimer();
+
+    const sameAsActive =
+      target.surface === state.activeSurface &&
+      target.mode === state.activeMode;
+    if (sameAsActive) {
+      clearExitTimer();
+      clearOwnerExpiryTimer();
+      clearHideTimer();
+      if (!state.visible) restoreIncumbent();
+    } else {
+      schedulePointerExit();
+    }
 
     const candidateChanged =
       target.surface !== state.hoverHint || target.mode !== state.hoverMode;
     const anchorMoved =
+      honorPointerQuiet &&
       distance(
         state.hoverAnchorX,
         state.hoverAnchorY,
@@ -1697,7 +2053,7 @@
       state.hoverAnchorX = state.pointerX;
       state.hoverAnchorY = state.pointerY;
     } else if (state.hoverTimer) {
-      return;
+      return null;
     }
 
     state.hoverHint = target.surface;
@@ -1710,29 +2066,86 @@
       currentChallenger.mode === target.mode
         ? currentChallenger.since
         : observedAt;
-    const quietDelay = Math.max(
-      0,
-      state.lastPointerMoveAt + state.settings.pointerQuietMs - challengerSince,
-    );
+    const quietDelay = honorPointerQuiet
+      ? Math.max(
+          0,
+          state.lastPointerMoveAt +
+            state.settings.pointerQuietMs -
+            challengerSince,
+        )
+      : 0;
     const decision = focusCoordinator.observe(target, {
       now: observedAt,
       delay: Math.max(delay, quietDelay),
     });
     if (decision.action === "hold") {
       clearHoverResidence();
-      return;
+      return target.surface;
     }
     if (decision.action === "commit") {
-      commitResolvedTarget(target);
+      const surface = commitResolvedTarget(target);
       clearHoverResidence();
-      return;
+      return surface;
     }
 
     state.hoverTimer = setTimeout(() => {
       state.hoverTimer = null;
-      const current = document.elementFromPoint(state.pointerX, state.pointerY);
-      queueHoverAcquire(current);
+      if (source === "hover") {
+        const current = document.elementFromPoint(
+          state.pointerX,
+          state.pointerY,
+        );
+        queueHoverAcquire(current);
+      } else {
+        acquireSurface(source);
+      }
     }, decision.remaining || delay);
+    return null;
+  }
+
+  function acquireSurface(reason) {
+    if (!canAutoRun() || !state.hasUserInteracted || state.pinned) return null;
+
+    let family = pageFamily();
+    let sourceEl = null;
+    let point = state.pointerPresent
+      ? pointerPoint()
+      : readingBandPoint(state.lastScrollContainer);
+
+    if (actionSurfaceShouldWin()) {
+      family = state.actionLockMode || "create";
+      sourceEl = state.actionLockEl;
+      point = pointerPoint();
+    }
+
+    let target = resolvedTargetFromPoint(family, point, sourceEl, {
+      allowPassiveMedia: false,
+    });
+    if (!target && reason === "scroll" && !actionSurfaceShouldWin()) {
+      point = readingBandPoint(state.lastScrollContainer);
+      target = resolvedTargetFromPoint(pageFamily(), point, null, {
+        allowPassiveMedia: false,
+      });
+    }
+    if (!target && family !== "read" && !state.pointerPresent) {
+      target = resolvedTargetFromPoint(pageFamily(), point, null, {
+        allowPassiveMedia: false,
+      });
+    }
+    return observeAutomaticTarget(target, { source: reason });
+  }
+
+  function queueHoverAcquire(sourceEl) {
+    if (!canAutoRun() || !state.settings.autoOnHover || state.pinned) return;
+    const target = resolvedTargetFromPoint(
+      pageFamily(),
+      pointerPoint(),
+      sourceEl,
+    );
+    observeAutomaticTarget(target, {
+      source: "hover",
+      honorPointerQuiet: true,
+    });
   }
 
   function queueScrollAcquire() {
@@ -1751,33 +2164,77 @@
     state.lastInteractionAt = nowTs();
   }
 
-  function schedulePointerExit() {
-    if (state.exitTimer || !state.visible || state.pinned) return;
+  function schedulePointerExit({ force = false } = {}) {
+    if (state.exitTimer || !state.activeSurface || state.pinned) return;
     state.exitTimer = setTimeout(() => {
       state.exitTimer = null;
+      if (state.pinned || actionSurfaceShouldWin()) return;
       if (
-        !state.pinned &&
-        state.activeRect &&
-        !pointInsideRect(
+        state.activeMode === "media" &&
+        isStrongPlayingVideo(state.activeMedia)
+      ) {
+        return;
+      }
+
+      if (force) {
+        const current = document.elementFromPoint(
           state.pointerX,
           state.pointerY,
-          state.activeRect,
-          state.settings.revealBuffer,
-        )
-      ) {
-        hideOverlay(false);
+        );
+        const currentTarget = resolvedTargetFromPoint(
+          pageFamily(),
+          pointerPoint(),
+          current,
+        );
+        if (currentTarget?.surface === state.activeSurface) return;
+      } else if (pointerOwnsSurface()) {
+        return;
       }
-    }, state.settings.noTargetHoldMs);
+
+      hideOverlay(false, { preserveSurface: true });
+      clearOwnerExpiryTimer();
+      state.ownerExpiryTimer = setTimeout(
+        () => {
+          state.ownerExpiryTimer = null;
+          let stillOwns = pointerOwnsSurface();
+          if (force && stillOwns) {
+            const current = document.elementFromPoint(
+              state.pointerX,
+              state.pointerY,
+            );
+            const currentTarget = resolvedTargetFromPoint(
+              pageFamily(),
+              pointerPoint(),
+              current,
+            );
+            stillOwns = currentTarget?.surface === state.activeSurface;
+          }
+          if (
+            !state.pinned &&
+            !state.visible &&
+            !actionSurfaceShouldWin() &&
+            !stillOwns
+          ) {
+            clearActiveOwnership();
+          }
+        },
+        Math.max(state.settings.pointerExitMs, state.settings.noTargetHoldMs),
+      );
+    }, state.settings.pointerExitMs);
   }
 
-  function onPointerMove(event) {
-    state.pointerX = event.clientX;
-    state.pointerY = event.clientY;
-    state.lastPointerMoveAt = nowTs();
-    state.hasUserInteracted = true;
-
+  function processPointerMove() {
+    state.pointerRafId = 0;
+    const target =
+      document.elementFromPoint(state.pointerX, state.pointerY) ||
+      state.pendingPointerTarget;
+    state.pendingPointerTarget = null;
+    if (!target) {
+      schedulePointerExit({ force: true });
+      return;
+    }
     if (state.pickMode) {
-      const surface = directSurfaceFromPointer(pageFamily(), event.target);
+      const surface = directSurfaceFromPointer(pageFamily(), target);
       if (surface) {
         state.pickSurface = surface;
         switchSurface(surface, pageFamily());
@@ -1790,11 +2247,38 @@
     }
 
     if (state.pinned) return;
-    if (transientInteractionFrom(event.target)) {
+    if (transientInteractionFrom(target)) {
       suspendAutomaticFocus();
       return;
     }
-    queueHoverAcquire(event.target);
+    queueHoverAcquire(target);
+  }
+
+  function onPointerMove(event) {
+    state.pointerX = event.clientX;
+    state.pointerY = event.clientY;
+    state.pointerPresent = true;
+    state.pendingPointerTarget = event.target;
+    state.lastPointerMoveAt = nowTs();
+    state.hasUserInteracted = true;
+    if (!state.pointerRafId) {
+      state.pointerRafId = requestAnimationFrame(processPointerMove);
+    }
+  }
+
+  function onPointerExit(event) {
+    if (event?.relatedTarget) return;
+    state.pointerPresent = false;
+    state.pendingPointerTarget = null;
+    cancelAnimationFrame(state.pointerRafId);
+    state.pointerRafId = 0;
+    clearHoverResidence();
+    if (
+      !state.pinned &&
+      !(state.activeMode === "media" && isStrongPlayingVideo(state.activeMedia))
+    ) {
+      clearActiveOwnership();
+    }
   }
 
   function onScroll(event) {
@@ -1809,17 +2293,21 @@
     state.lastScrollAt = nowTs();
     state.lastScrollContainer = isDocumentScroll ? null : target;
     clearHoverResidence();
+    invalidateSurfaceMap(state.settings.scrollIdleMs, { reclassify: false });
     if (state.activeSurface && !state.pinned) scheduleSurfaceRefresh("scroll");
     queueScrollAcquire();
   }
 
   function onFocusIn(event) {
-    const target = event.target;
-    if (transientInteractionFrom(target)) {
+    const origin = event.target;
+    if (transientInteractionFrom(origin)) {
       suspendAutomaticFocus();
       return;
     }
-    if (isEditable(target)) {
+    const editable = editableFrom(origin);
+    const control = interactiveFrom(origin);
+    if (editable) {
+      const target = editable;
       recordActionLock(target, "create");
       if (
         canAutoRun() &&
@@ -1832,12 +2320,15 @@
       ) {
         switchSurface(findInteractionShell(target), "create");
       }
-    } else if (isInteractive(target)) {
+    } else if (control) {
+      const target = control;
       recordActionLock(target, "act");
       const collection = collectionSurfaceFrom(target);
       if (collection && canAutoRun()) {
-        if (state.siteProfile?.strictTargeting) queueHoverAcquire(target);
-        else switchSurface(collection, "scan");
+        observeAutomaticTarget(
+          { surface: collection, mode: "scan", origin },
+          { source: "focus" },
+        );
       }
     }
   }
@@ -1851,17 +2342,18 @@
 
   function onPointerDown(event) {
     state.hasUserInteracted = true;
-    const target = event.target;
-    const video = target.closest?.(MEDIA_SELECTOR);
+    const origin = event.target;
+    const target = interactiveFrom(origin) || editableFrom(origin) || origin;
+    const video = origin.closest?.(MEDIA_SELECTOR);
     if (video) state.mediaActivatedAt.set(video, nowTs());
     if (
       interactiveTriggerOpensLayer(target) ||
-      transientInteractionFrom(target)
+      transientInteractionFrom(origin)
     ) {
       suspendAutomaticFocus();
       return;
     }
-    if (isInteractive(target) && !state.activeSurface?.contains(target)) {
+    if (interactiveFrom(origin) && !state.activeSurface?.contains(target)) {
       suspendAutomaticFocus();
     }
   }
@@ -1878,8 +2370,11 @@
 
   function onClick(event) {
     state.hasUserInteracted = true;
-    const target = event.target;
-    const clickedVideo = target.closest?.(MEDIA_SELECTOR);
+    const origin = event.target;
+    const editable = editableFrom(origin);
+    const control = interactiveFrom(origin);
+    const target = editable || control || origin;
+    const clickedVideo = origin.closest?.(MEDIA_SELECTOR);
     if (clickedVideo) {
       state.mediaActivatedAt.set(clickedVideo, nowTs());
     }
@@ -1889,10 +2384,10 @@
       event.stopImmediatePropagation();
       state.pickMode = false;
       state.shell?.classList.remove("choosing");
-      if (state.pickSurface && document.contains(state.pickSurface)) {
-        state.activeSurface = state.pickSurface;
-        state.pinned = true;
-        attachObservers(state.activeSurface);
+      const chosenSurface =
+        state.pickSurface || directSurfaceFromPointer(pageFamily(), origin);
+      if (chosenSurface && document.contains(chosenSurface)) {
+        switchSurface(chosenSurface, pageFamily(), { pin: true });
       } else {
         state.pinned = false;
         hideOverlay(true);
@@ -1901,12 +2396,12 @@
       pushRuntimeState();
       return;
     }
-    if (isEditable(target)) {
+    if (editable) {
       recordActionLock(target, "create");
       if (canAutoRun()) switchSurface(findInteractionShell(target), "create");
       return;
     }
-    if (isInteractive(target)) {
+    if (control) {
       recordActionLock(target, "act");
       if (interactiveTriggerOpensLayer(target)) {
         suspendAutomaticFocus();
@@ -1914,8 +2409,10 @@
       }
       const collection = collectionSurfaceFrom(target);
       if (collection && canAutoRun()) {
-        if (state.siteProfile?.strictTargeting) queueHoverAcquire(target);
-        else switchSurface(collection, "scan");
+        observeAutomaticTarget(
+          { surface: collection, mode: "scan", origin },
+          { source: "click" },
+        );
         return;
       }
       if (
@@ -2077,6 +2574,12 @@
       state.activeSurface = null;
       clearObservers();
       hideOverlay(true);
+    } else if (!canAutoRun() && !state.pinned) {
+      state.activeSurface = null;
+      state.activeMode = null;
+      clearObservers();
+      focusCoordinator.clear();
+      hideOverlay(true);
     }
   }
 
@@ -2085,6 +2588,7 @@
       pausedForTab: state.pausedForTab,
       hostname: location.hostname,
       siteMode: currentSiteMode(),
+      siteDefaultMode: state.siteProfile?.defaultMode || "auto",
       autoBlockedReason: autoBlockedReason(),
       activeMode: state.activeMode,
       hasActiveSurface: !!(
@@ -2099,6 +2603,12 @@
       snapshot.activeSurfaceTag = state.activeSurface?.tagName || "";
       snapshot.activeMediaId = state.activeMedia?.id || "";
       snapshot.pictureInPictureMediaId = state.pictureInPictureMedia?.id || "";
+      snapshot.pointerPresent = state.pointerPresent;
+      snapshot.surfaceMap = {
+        profileId: state.surfaceMap.profileId,
+        generation: state.surfaceMap.generation,
+        entries: state.surfaceMap.entries.length,
+      };
     }
     return snapshot;
   }
@@ -2206,6 +2716,7 @@
   }
 
   function queueInteractionLayerCheck() {
+    scheduleSurfaceMapRefresh();
     clearTimeout(state.interactionCheckTimer);
     state.interactionCheckTimer = setTimeout(() => {
       state.interactionCheckTimer = null;
@@ -2247,6 +2758,19 @@
 
   function handleLocationChange() {
     if (location.href === state.lastHref) return false;
+    clearHoverResidence();
+    clearTimeout(state.scrollTimer);
+    clearTimeout(state.exitTimer);
+    clearTimeout(state.ownerExpiryTimer);
+    clearTimeout(state.transitionTimer);
+    clearTimeout(state.surfaceMapTimer);
+    state.scrollTimer = null;
+    state.exitTimer = null;
+    state.ownerExpiryTimer = null;
+    state.transitionTimer = null;
+    state.surfaceMapTimer = null;
+    state.lastScrollContainer = null;
+    state.interactionUntil = 0;
     state.lastHref = location.href;
     state.siteProfile = resolveSiteProfile();
     state.pinned = false;
@@ -2257,7 +2781,14 @@
     state.activeMode = null;
     clearObservers();
     hideOverlay(true);
+    state.surfaceMap = {
+      profileId: state.siteProfile?.id || "generic",
+      generation: state.surfaceMap.generation + 1,
+      builtAt: 0,
+      entries: [],
+    };
     pushRuntimeState();
+    scheduleSurfaceMapRefresh(160, { reclassify: true });
     scheduleReacquire();
     return true;
   }
@@ -2297,15 +2828,19 @@
   }
 
   function onResize() {
+    invalidateSurfaceMap(160, { reclassify: false });
     scheduleSurfaceRefresh("resize");
   }
 
   function handleVisibility(hidden) {
     if (hidden) {
-      hideOverlay(true, { preserveSurface: true });
+      state.pointerPresent = false;
+      clearHoverResidence();
+      if (state.pinned) hideOverlay(true, { preserveSurface: true });
+      else clearActiveOwnership();
       return;
     }
-    if (!restoreIncumbent()) scheduleReacquire();
+    if (state.pinned) restoreIncumbent();
   }
 
   function onVisibilityChange() {
@@ -2314,6 +2849,8 @@
 
   function teardown() {
     window.removeEventListener("mousemove", onPointerMove);
+    window.removeEventListener("mouseout", onPointerExit);
+    window.removeEventListener("blur", onPointerExit);
     document.removeEventListener("pointerdown", onPointerDown, true);
     document.removeEventListener("scroll", onScroll, true);
     window.removeEventListener("resize", onResize);
@@ -2377,7 +2914,9 @@
 
   function onPageHide(event) {
     if (event?.persisted) {
-      hideOverlay(true);
+      state.pointerPresent = false;
+      if (state.pinned) hideOverlay(true, { preserveSurface: true });
+      else clearActiveOwnership();
       return;
     }
     teardown();
@@ -2390,7 +2929,7 @@
       .then(applySettings)
       .catch(() => {});
     if (state.pinned) refreshActiveSurface();
-    else scheduleReacquire();
+    scheduleSurfaceMapRefresh(160, { reclassify: true });
     pushRuntimeState();
   }
 
@@ -2400,10 +2939,15 @@
       clamp,
       distance,
       normalizeHost,
+      autoBlockedReason,
       candidateScore,
+      closestMatchingAncestor,
       collectionSurfaceFrom,
+      directSurfaceFromPointer,
+      localReadingSurfaceFrom,
       repeatedSiblingPattern,
       resolvedTargetFromPoint,
+      currentSiteMode,
       pageFamily,
       focusCoordinator,
       rectForElement,
@@ -2428,8 +2972,11 @@
     setupStorageWatcher();
     setupRouteWatcher();
     setupPageObserver();
+    scheduleSurfaceMapRefresh(160, { reclassify: true });
 
     window.addEventListener("mousemove", onPointerMove, { passive: true });
+    window.addEventListener("mouseout", onPointerExit, { passive: true });
+    window.addEventListener("blur", onPointerExit, { passive: true });
     document.addEventListener("pointerdown", onPointerDown, true);
     document.addEventListener("scroll", onScroll, {
       capture: true,
@@ -2463,5 +3010,5 @@
     pushRuntimeState();
   }
 
-  mount().catch((err) => console.error("[Umbra2 mount error]", err));
+  mount().catch((err) => console.error("[Umbra mount error]", err));
 })();

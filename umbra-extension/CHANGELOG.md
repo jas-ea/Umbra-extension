@@ -1,5 +1,30 @@
 # Changelog
 
+## 2.7.0
+
+- Fixed dense chat pages whose outer layout classes accidentally matched composer or toolbar rejection rules.
+- Kept long conversation turns usable by focusing the paragraph, list, code block, table, or figure under the pointer instead of a multi-screen message shell.
+- Resolved overlapping site selectors by DOM proximity, so the nearest declared content unit wins regardless of selector order.
+- Added repeated-list inference for unfamiliar workspaces while preserving post-level focus on feeds.
+- Separated direct area selection from automatic rejection rules, allowing deliberate selection of sidebars, folders, and workspace panels.
+- Made the global automatic-focus switch stop route, recovery, hover, and scroll acquisition consistently, and preserved explicit Automatic site overrides.
+- Raised the default surrounding darkness to 80% and applied live opacity changes directly to the mask without reloading the page.
+- Added profiles for Grok, LinkedIn, Reddit, YouTube, Discord, and Hacker News.
+
+## 2.6.0
+
+- Replaced the shifted-bars identity with a clear page section inside a darkened field and regenerated the extension icons, store tile, logo, and poster.
+- Retired stale visual focus shortly after the pointer leaves a surface, while keeping a brief internal grace for returning to the same block.
+- Released automatic ownership on rejected nested controls, browser-viewport exit, tab visibility changes, and stale interaction recovery.
+- Routed hover, scroll, route, and recovery candidates through the same dwell coordinator.
+- Sampled pointer targeting once per animation frame and added an ephemeral page surface map that rebuilds after DOM quiet.
+- Reclassified delayed pages after hydration and stopped incidental tables from forcing the comparative-market profile.
+- Kept GitHub issue rows together as a collection and tightened fallback evidence on unfamiliar pages.
+- Used rendered text bounds when adjacent floated content inflates an article paragraph's CSS box.
+- Recognized text, SVG, and icon descendants as part of their enclosing control.
+- Injected the current runtime into eligible open tabs after installation or update.
+- Added browser coverage for pointer exit, rejected chrome, same-surface return, nested controls, and page mapping.
+
 ## 2.5.1
 
 - Prevented Gmail toolbars, category tabs, menus, and headers from becoming focus surfaces.
@@ -35,7 +60,7 @@
 - Tightened chat, feed, issue-list, question-list, documentation, and article profiles so content blocks beat broad page shells and utility controls.
 - Added direct area selection, truthful action responses, session-persistent tab pause, and same-page startup recovery.
 - Replaced the popup with one context-sensitive primary action and an overflow menu for site mode, tab pause, and Settings.
-- Replaced the former aperture identity with the Index Shift mark and rebuilt the store tile, launch poster, listing copy, and launch documents.
+- Replaced the former aperture identity with a page-section mark and rebuilt the store tile, launch poster, listing copy, and launch documents.
 - Added browser contracts for stable dwell, clicked-control handoff, direct selection, profile matching, and mask-outline alignment.
 
 ## 2.2.2

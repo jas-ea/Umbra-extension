@@ -28,23 +28,37 @@ npm run validate
 
 ## Recommended Live QA Before Release
 
-1. ChatGPT or Codex: hover across adjacent answer blocks, then move into the composer and verify focus switches cleanly without selecting the page shell.
-2. X / Twitter or Instagram-style feeds: read adjacent posts near promoted content, side rails, and fixed drawers; verify posts win over surrounding chrome.
-3. Gmail: move across inbox rows and controls; verify the complete list stays visible, then open a message and verify the reading pane wins.
-4. Calendar: move across cells and events; verify the current grid stays visible and event menus suspend the overlay.
-5. Slack: move through messages, the composer, reactions, menus, and submenus; verify the conversation stays stable and controls are never dimmed during use.
-6. YouTube or an inline news video: verify user-started playback can hold focus, muted autoplay cannot steal it, and fullscreen suspends Umbra.
-7. Comparative site such as CoinGecko: verify row-level autofocus does not activate by default.
+1. ChatGPT or Codex: test short and multi-screen answers, code, tables, source actions, the thread rail, and the composer.
+2. Claude, Gemini, and Grok: move between adjacent turns and confirm the nearest message or local reading block wins.
+3. X or Instagram: read adjacent posts near promoted content, side rails, composers, and fixed drawers.
+4. LinkedIn: test feed posts beside navigation, recommendations, messaging, and share controls.
+5. Reddit: test a feed, a long post, nested comments, community navigation, and the reply composer.
+6. Gmail: scan inbox rows and controls as one list, then open a message and confirm the reading pane wins.
+7. Google Calendar: move across cells and events; confirm the current grid stays visible and event menus suspend the overlay.
+8. Slack: move through messages, the composer, reactions, menus, and submenus; confirm the conversation stays stable.
+9. Discord: scan a message channel, move through channel and member rails, and open message actions.
+10. GitHub: test an issue list, an issue or pull-request conversation, code, filters, and navigation.
+11. YouTube: test browse cards, comments, user-started playback, muted autoplay, picture-in-picture, and fullscreen.
+12. Hacker News: scan a story list, then move through nested comments on an item page.
+13. Stack Overflow: scan the question list, open a question, and move between the question, answers, and side rail.
+14. Wikipedia and Chrome Developers: test long sections, tables, code blocks, contents navigation, and sticky headers.
+15. CoinGecko or another comparative market table: confirm row-level autofocus stays off by default and direct selection can pin the table.
 
 ## Acceptance criteria
 
 - First focus must not occur before 1 second of stable residence. Refocus must not occur before 1.45 seconds on one challenger.
 - Composite collections must remain whole while the user scans their rows or cells.
-- The current cutout must remain visible while the next block is confirmed.
+- Leaving the current block must retire its cutout before a different block completes refocus dwell.
+- Returning to the same block during the ownership grace must restore it without a second full dwell.
+- Rejected controls inside a content block and leaving the browser viewport must release automatic focus.
 - Menus, dialogs, dragging, and fullscreen must suspend the overlay immediately.
 - Pinned focus must survive those interruptions and tab visibility changes.
 - Muted autoplay must not steal focus from user-started media.
 - The mask and outline must stay aligned during movement and clipping.
 - A clicked control must not trap the cutout after the pointer moves away.
+- Nested text, SVG, and icon nodes inside a control must inherit that control's interaction behavior.
 - Direct area selection must pin the block the user clicks.
+- Direct area selection must work on a folder, sidebar, or workspace panel even when automatic mode rejects it.
+- Turning automatic focus off must stop every automatic acquisition path while leaving direct selection available.
+- Changing page darkness must update a visible mask without reloading the page.
 - When selection is uncertain, no focus is better than a broad app shell.

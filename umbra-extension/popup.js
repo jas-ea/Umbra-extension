@@ -86,12 +86,12 @@ async function sendToTab(message, options = {}) {
   return null;
 }
 
-async function setSiteMode(hostname, mode) {
+async function setSiteMode(hostname, mode, defaultMode = "auto") {
   const host = normalizeHost(hostname);
   if (!host || host === "Current page") return;
   const settings = normalizeSettings(await chrome.storage.sync.get(null));
   const overrides = { ...(settings.siteOverrides || {}) };
-  if (!mode || mode === "auto") delete overrides[host];
+  if (!mode || mode === defaultMode) delete overrides[host];
   else overrides[host] = mode;
   const entries = Object.entries(overrides).slice(
     -(globalThis.UMBRA_MAX_SITE_OVERRIDES || 120),
@@ -127,7 +127,7 @@ function paintPopup() {
   $("enabledToggle").checked = enabled;
   const darkness = Math.min(
     0.9,
-    Math.max(0.45, Number(popupSettings?.overlayOpacity) || 0.74),
+    Math.max(0.45, Number(popupSettings?.overlayOpacity) || 0.8),
   );
   $("darknessSlider").value = String(darkness);
   $("darknessValue").textContent = `${Math.round(darkness * 100)}%`;
@@ -171,6 +171,8 @@ function paintPopup() {
   }
   if (mode === "manual") {
     setStatus("On request for this site", "active");
+  } else if (!popupSettings.autoOnHover && !popupSettings.autoOnScroll) {
+    setStatus("Automatic focus is off", "paused");
   } else {
     setStatus("Automatic on this site", "active");
   }
@@ -212,7 +214,11 @@ async function runPrimaryAction() {
     return;
   }
   if (action === "turn-on") {
-    await setSiteMode(popupHostname, "auto");
+    await setSiteMode(
+      popupHostname,
+      "auto",
+      popupState?.siteDefaultMode || "auto",
+    );
     popupState = { ...popupState, siteMode: "auto", autoBlockedReason: null };
     await refreshPopup({ inject: false });
     return;
@@ -269,7 +275,11 @@ async function initPopup() {
 
   $("siteModeSelect").addEventListener("change", async () => {
     const mode = $("siteModeSelect").value;
-    await setSiteMode(popupHostname, mode);
+    await setSiteMode(
+      popupHostname,
+      mode,
+      popupState?.siteDefaultMode || "auto",
+    );
     popupState = {
       ...popupState,
       siteMode: mode,

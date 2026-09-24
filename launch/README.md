@@ -1,6 +1,6 @@
 # Umbra Launch Kit
 
-This folder contains the reviewed public material for Umbra: four short launch documents, a logo system, store artwork, a social poster, and screenshots from public websites.
+This folder contains the review copy and media for Umbra 2.7.0. Nothing here has been published.
 
 ![Umbra launch poster](assets/poster/umbra-launch-poster.png)
 
@@ -12,14 +12,14 @@ This folder contains the reviewed public material for Umbra: four short launch d
 - Store tile: `assets/poster/umbra-store-promo-440x280.svg` and `assets/poster/umbra-store-promo-440x280.png`
 - Real-site screenshots: `assets/screenshots/`
 
-The mark represents one page row shifting out of surrounding noise. The store tile contains no text so it remains legible at reduced size. The poster uses one headline, one product explanation, and one publisher line.
+The mark shows a clear page section inside a darkened field. The poster and store tile use the same literal visual model and remain legible at reduced size.
 
 ## Documents
 
-1. `docs/01-positioning-and-research.md`
-2. `docs/02-use-cases-and-screenshots.md`
-3. `docs/03-go-live-checklist.md`
-4. `docs/04-blog-and-social.md`
+1. `docs/01-product-note.md`: public product story, design decisions, and research context
+2. `docs/02-real-world-examples.md`: verified examples from public websites
+3. `docs/03-release-checklist.md`: internal store, GitHub, verification, and publication gates
+4. `docs/04-publication-drafts.md`: review copy for the store, blog, GitHub, HN, X, and LinkedIn
 
 ## Release gate
 
@@ -31,4 +31,6 @@ npm run validate
 npm run package:extension
 ```
 
-The current upload package is `dist/umbra-2.5.1.zip`.
+The current upload package is `dist/umbra-2.7.0.zip`.
+
+Regenerate the brand assets, extension icons, store tile, and social poster with `npm run render:assets`.

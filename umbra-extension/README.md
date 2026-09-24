@@ -1,19 +1,21 @@
-# Umbra 2.5.1
+# Umbra 2.7.0
 
-Umbra keeps one block clear on a busy webpage while the original site stays interactive. It is a Manifest V3 Chrome extension published by Cassini Research.
+Umbra keeps the part of a webpage you are using clear and darkens everything around it. It is a Manifest V3 Chrome extension from [Cassini Research](https://cassiniresearch.com/).
 
 ## Behavior
 
-- The first automatic focus waits 1 second. Refocusing waits 1.45 seconds on one stable candidate.
+- The first automatic focus waits 1 second. Switching waits 1.45 seconds on one stable candidate.
 - Mail lists, calendars, grids, and conversations stay visible as collections instead of collapsing to one row or cell.
-- The current cutout stays visible while a different surface is being confirmed.
+- Long conversation turns resolve to the local paragraph, list, code block, table, or figure under the pointer.
+- Leaving the current surface retires its cutout quickly. A new surface appears only after the pointer settles there.
+- Returning to the same surface during the short ownership grace restores it without starting over.
 - Menus, popovers, dialogs, dragging, and fullscreen suspend the overlay instead of becoming accidental targets.
 - User-started visible video can hold focus; muted autoplay cannot claim focus by itself.
-- The mask and outline move from the same geometry, including rounded and clipped corners.
-- Choose an area lets the user click and pin a block directly.
+- The mask and outline share the same geometry, including rounded and clipped corners.
+- Choose an area lets the user click and pin content, folders, sidebars, or workspace panels directly.
 - Page controls, forms, composers, sidebars, drawers, and broad app shells are rejected or deprioritized.
 - Pause is stored per tab for the browser session.
-- The popup can restore the content script on eligible pages after installation or update without asking for a reload.
+- Installation and updates inject the current runtime into eligible open pages. The popup can repair an individual page if Chrome blocks that injection.
 
 ## Popup
 
@@ -22,10 +24,10 @@ The popup contains:
 - global on/off
 - current site and state
 - one context-sensitive primary action
-- a live surrounding-darkness control
+- a live page-darkness control
 - site mode, tab pause, and Settings
 
-The Settings page contains only automatic focus, the focus outline, site-specific choices, keyboard shortcuts, and reset.
+The Settings page contains only automatic focus, the focus outline, site-specific choices, keyboard shortcuts, and reset. Turning automatic focus off leaves direct area selection available.
 
 ## Site modes
 
@@ -68,9 +70,9 @@ npm run validate
 npm run package:extension
 ```
 
-The browser suite covers noisy chat and feed layouts, Gmail-style inboxes, Calendar grids, Slack-style conversations and menus, video and fullscreen, adjacent-item handoff, stable dwell, manual area selection, nested scrolling, route changes, clipped geometry, reduced motion, forced colors, and text selection.
+The browser suite covers noisy chat and feed layouts, Gmail-style inboxes, Calendar grids, Slack-style conversations and menus, pointer exit, rejected nested controls, video and fullscreen, adjacent-item handoff, stable dwell, manual area selection, nested scrolling, route changes, clipped geometry, reduced motion, forced colors, and text selection.
 
-The package command creates `dist/umbra-2.5.1.zip`.
+The package command creates `dist/umbra-2.7.0.zip`.
 
 ## Privacy
 

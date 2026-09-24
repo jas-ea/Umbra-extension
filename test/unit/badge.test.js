@@ -25,24 +25,30 @@ beforeAll(() => {
 
 describe("visual defaults", () => {
   it("uses strong surrounding suppression by default", () => {
-    expect(defaults.overlayOpacity).toBe(0.74);
+    expect(defaults.overlayOpacity).toBe(0.8);
   });
 
   it("upgrades the previous default without replacing a custom value", () => {
     expect(storageMigration({ overlayOpacity: 0.52 }).set).toMatchObject({
-      overlayOpacity: 0.74,
-      visualDefaultsVersion: 1,
+      overlayOpacity: 0.8,
+      visualDefaultsVersion: 2,
     });
+    expect(
+      storageMigration({
+        overlayOpacity: 0.74,
+        visualDefaultsVersion: 1,
+      }).set,
+    ).toMatchObject({ overlayOpacity: 0.8, visualDefaultsVersion: 2 });
     expect(
       storageMigration({ overlayOpacity: 0.67 }).set.overlayOpacity,
     ).toBeUndefined();
     expect(normalizeSettings({ overlayOpacity: 0.52 }).overlayOpacity).toBe(
-      0.74,
+      0.8,
     );
     expect(
       normalizeSettings({
         overlayOpacity: 0.52,
-        visualDefaultsVersion: 1,
+        visualDefaultsVersion: 2,
       }).overlayOpacity,
     ).toBe(0.52);
   });
@@ -75,6 +81,13 @@ describe("visual defaults", () => {
       pointerQuietMs: 360,
     });
   });
+
+  it("preserves an explicit automatic site override", () => {
+    expect(
+      normalizeSettings({ siteOverrides: { "docs.google.com": "auto" } })
+        .siteOverrides,
+    ).toEqual({ "docs.google.com": "auto" });
+  });
 });
 
 describe("badgeForState", () => {
@@ -92,6 +105,10 @@ describe("badgeForState", () => {
     expect(badgeForState({ autoBlockedReason: "disabled" }).text).toBe("OFF");
     expect(badgeForState({ pausedForTab: true }).text).toBe("II");
     expect(badgeForState({ siteMode: "off" }).text).toBe("OFF");
+    expect(
+      badgeForState({ siteMode: "auto", autoBlockedReason: "automatic-off" })
+        .text,
+    ).toBe("M");
     expect(badgeForState({ siteMode: "manual" }).text).toBe("M");
   });
 

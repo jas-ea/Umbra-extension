@@ -4,7 +4,7 @@ import Foundation
 let width = 1200
 let height = 628
 let repo = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-let screenshotURL = repo.appendingPathComponent("launch/assets/screenshots/stackoverflow-questions.png")
+let screenshotURL = repo.appendingPathComponent("launch/assets/screenshots/github-openai-cookbook-issues.png")
 let outputURL = repo.appendingPathComponent("launch/assets/poster/umbra-launch-poster.png")
 
 guard let screenshot = NSImage(contentsOf: screenshotURL) else {
@@ -66,25 +66,58 @@ func drawText(
   NSAttributedString(string: text, attributes: attributes).draw(at: point)
 }
 
+func drawMark(x: CGFloat, y: CGFloat, size: CGFloat) {
+  let scale = size / 512
+  roundedRect(
+    NSRect(x: x + 48 * scale, y: y + 48 * scale, width: 416 * scale, height: 416 * scale),
+    radius: 96 * scale,
+    color: NSColor(calibratedRed: 0.106, green: 0.110, blue: 0.122, alpha: 1)
+  )
+  strokeRoundedRect(
+    NSRect(x: x + 48 * scale, y: y + 48 * scale, width: 416 * scale, height: 416 * scale),
+    radius: 96 * scale,
+    color: line,
+    width: max(1, 8 * scale)
+  )
+  roundedRect(
+    NSRect(x: x + 128 * scale, y: y + 132 * scale, width: 256 * scale, height: 18 * scale),
+    radius: 9 * scale,
+    color: quiet
+  )
+  roundedRect(
+    NSRect(x: x + 88 * scale, y: y + 188 * scale, width: 336 * scale, height: 136 * scale),
+    radius: 24 * scale,
+    color: paper
+  )
+  roundedRect(
+    NSRect(x: x + 112 * scale, y: y + 212 * scale, width: 12 * scale, height: 88 * scale),
+    radius: 6 * scale,
+    color: signal
+  )
+  roundedRect(
+    NSRect(x: x + 128 * scale, y: y + 362 * scale, width: 256 * scale, height: 18 * scale),
+    radius: 9 * scale,
+    color: quiet
+  )
+}
+
 ink.setFill()
 NSBezierPath(rect: NSRect(x: 0, y: 0, width: width, height: height)).fill()
 
-strokeRoundedRect(NSRect(x: 64, y: 58, width: 47, height: 13), radius: 2, color: paper, width: 2)
-roundedRect(NSRect(x: 78, y: 77, width: 47, height: 13), radius: 2, color: signal)
-strokeRoundedRect(NSRect(x: 64, y: 96, width: 47, height: 13), radius: 2, color: paper, width: 2)
-drawText("Umbra", at: NSPoint(x: 139, y: 59), size: 30, weight: .semibold, color: paper)
+drawMark(x: 44, y: 33, size: 54)
+drawText("Umbra", at: NSPoint(x: 112, y: 54), size: 30, weight: .bold, color: paper)
 
-roundedRect(NSRect(x: 54, y: 124, width: 42, height: 5), radius: 2.5, color: signal)
-drawText("Keep your place", at: NSPoint(x: 54, y: 164), size: 58, weight: .bold, color: paper)
-drawText("on busy pages.", at: NSPoint(x: 54, y: 228), size: 58, weight: .bold, color: paper)
-drawText("The page dims around one block.", at: NSPoint(x: 56, y: 343), size: 22, weight: .regular, color: secondary)
-drawText("The original site stays interactive.", at: NSPoint(x: 56, y: 377), size: 22, weight: .regular, color: secondary)
-drawText("Chrome extension by Cassini Research", at: NSPoint(x: 56, y: 533), size: 17, weight: .medium, color: quiet)
+drawText("Darken the page", at: NSPoint(x: 44, y: 142), size: 50, weight: .bold, color: paper)
+drawText("around what", at: NSPoint(x: 44, y: 200), size: 50, weight: .bold, color: paper)
+drawText("you're using.", at: NSPoint(x: 44, y: 258), size: 50, weight: .bold, color: paper)
+drawText("Pause on a section. Umbra keeps it clear", at: NSPoint(x: 46, y: 384), size: 21, weight: .regular, color: secondary)
+drawText("and darkens everything around it.", at: NSPoint(x: 46, y: 416), size: 21, weight: .regular, color: secondary)
+drawText("Open-source Chrome extension by Cassini Research", at: NSPoint(x: 46, y: 536), size: 17, weight: .medium, color: quiet)
 
-roundedRect(NSRect(x: 530, y: 77, width: 628, height: 474), radius: 14, color: NSColor.black)
-strokeRoundedRect(NSRect(x: 530.5, y: 77.5, width: 627, height: 473), radius: 14, color: line, width: 1)
+roundedRect(NSRect(x: 492, y: 98, width: 674, height: 432), radius: 14, color: NSColor.black)
+strokeRoundedRect(NSRect(x: 492.5, y: 98.5, width: 673, height: 431), radius: 14, color: line, width: 1)
 
-let target = NSRect(x: 544, y: 91, width: 600, height: 446)
+let target = NSRect(x: 506, y: 112, width: 646, height: 404)
 let imageSize = screenshot.size
 let targetRatio = target.width / target.height
 let imageRatio = imageSize.width / imageSize.height

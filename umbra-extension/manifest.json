@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Umbra",
-  "version": "2.5.1",
-  "description": "Keeps one block clear on busy webpages while the original site stays interactive.",
+  "version": "2.7.0",
+  "description": "Keeps the part of a webpage you are using clear and darkens everything around it.",
   "homepage_url": "https://github.com/jas-ea/Umbra-extension",
   "permissions": ["scripting", "storage"],
   "host_permissions": ["<all_urls>"],

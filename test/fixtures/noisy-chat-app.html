@@ -20,6 +20,8 @@
     .message h2 { margin: 0 0 10px; font-size: 18px; }
     .message p { margin: 0 0 10px; }
     .message pre { overflow: auto; padding: 12px; border-radius: 8px; background: #111827; color: #dce5f8; }
+    .long-turn-context { display: grid; gap: 14px; }
+    .long-turn-context p { min-height: 150px; padding: 16px; border-left: 3px solid #c7ced9; background: #eef1f5; }
     .toolbar { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 12px; }
     .composer { position: sticky; bottom: 0; z-index: 3; padding: 14px 46px 20px; background: linear-gradient(180deg, rgba(16,19,25,0), #101319 28%); }
     .composer-shell { width: min(780px, 100%); margin: 0 auto; padding: 12px; border: 1px solid #3b4352; border-radius: 14px; background: #1a202b; }
@@ -38,7 +40,7 @@
       <div class="thread"><strong>Release checklist</strong><p>Build, verify, package.</p></div>
       <div class="rail-card"><button>Settings</button><button>Archive</button></div>
     </nav>
-    <main class="workspace">
+    <main class="workspace composer-parent">
       <header>
         <strong>Umbra product review</strong>
         <div>
@@ -67,6 +69,22 @@
           <h2>Implementation details</h2>
           <p>Another message below the target provides a nearby competing surface for switching behavior.</p>
           <p>It should become the target only when the pointer settles over it.</p>
+          <div class="toolbar">
+            <button>Copy</button>
+            <button>Retry</button>
+          </div>
+        </article>
+        <article class="message" data-message-author-role="assistant" id="assistant-message-long">
+          <h2>Long research response</h2>
+          <div class="long-turn-context">
+            <p>Context section one keeps the response substantially taller than the viewport.</p>
+            <p>Context section two includes enough material to make whole-turn focus visually useless.</p>
+            <p>Context section three represents a long answer with several independent reading blocks.</p>
+            <p id="long-turn-target">This paragraph is the local reading block under the pointer. Umbra should frame it with four visible corners instead of opening the entire multi-screen response.</p>
+            <p>Context section five remains below the selected paragraph.</p>
+            <p>Context section six keeps the response long after the current reading block.</p>
+            <p>Context section seven completes the oversized assistant response.</p>
+          </div>
           <div class="toolbar">
             <button>Copy</button>
             <button>Retry</button>

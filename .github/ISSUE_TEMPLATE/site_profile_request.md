@@ -3,7 +3,9 @@ name: Site profile request
 about: Request or improve handling for a specific website
 ---
 
-## Website
+Do not include private page content, account information, email addresses, authentication tokens, or screenshots from private workspaces. Use a public example or describe the page structure without private data.
+
+## Public website or hostname
 
 ## Page type
 

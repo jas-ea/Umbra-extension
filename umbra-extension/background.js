@@ -1,5 +1,12 @@
 import "./defaults.js";
 
+const RUNTIME_FILES = [
+  "defaults.js",
+  "site-profiles.js",
+  "focus-policy.js",
+  "content.js",
+];
+
 async function migrateStoredSettings() {
   const items = await chrome.storage.sync.get(null);
   const migration = globalThis.UMBRA_STORAGE_MIGRATION(items || {});
@@ -11,12 +18,33 @@ async function migrateStoredSettings() {
   }
 }
 
+function canInjectInto(tab) {
+  return (
+    typeof tab?.id === "number" &&
+    (/^https?:\/\//.test(tab.url || "") || /^file:\/\//.test(tab.url || ""))
+  );
+}
+
+async function injectIntoOpenTabs() {
+  if (!chrome.scripting?.executeScript) return;
+  const tabs = await chrome.tabs.query({});
+  await Promise.allSettled(
+    tabs.filter(canInjectInto).map((tab) =>
+      chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: RUNTIME_FILES,
+      }),
+    ),
+  );
+}
+
 chrome.runtime.onInstalled.addListener(() => {
-  migrateStoredSettings();
+  migrateStoredSettings().catch(() => {});
+  injectIntoOpenTabs().catch(() => {});
 });
 
 chrome.runtime.onStartup?.addListener(() => {
-  migrateStoredSettings();
+  migrateStoredSettings().catch(() => {});
 });
 
 const badgeForState = globalThis.UMBRA_BADGE_FOR_STATE;

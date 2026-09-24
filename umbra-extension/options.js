@@ -36,6 +36,7 @@ function setStatus(text, tone = "saved") {
 }
 
 function modeLabel(mode) {
+  if (mode === "auto") return "Automatic";
   return mode === "manual" ? "On request" : "Off";
 }
 

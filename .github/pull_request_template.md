@@ -10,6 +10,7 @@
 
 - [ ] fresh page load does not auto-focus
 - [ ] hover dwell works
+- [ ] stale focus retires after pointer exit
 - [ ] scroll-stop works
 - [ ] context is preserved
 - [ ] sidebars/toolbars do not win

@@ -1,28 +1,36 @@
 # Architecture
 
-Umbra has five runtime stages.
+Umbra has six runtime stages.
 
-## 1. Confirm an input
+## 1. Map the page
 
-Automatic focus starts only after the pointer settles on one surface or scrolling stops. The first focus waits 1 second; a new challenger waits 1.45 seconds. Moving across candidates resets that clock. Choose an area bypasses inference.
+After the DOM becomes quiet, Umbra builds an in-memory map of known content surfaces, detail regions, collections, and preferred targets. Mutations, scrolling, resizing, and same-page navigation invalidate that map and schedule a bounded rebuild. The map stores element references and geometry only. It is never persisted or transmitted.
 
-## 2. Classify the task surface
+Host and route rules choose a known site profile. DOM evidence can reclassify a delayed generic page after hydration. A normal article containing a table no longer becomes a comparative market page solely because the table exists.
+
+## 2. Confirm an input
+
+Pointer work is sampled once per animation frame. Automatic focus starts only after the pointer settles on one surface or scrolling stops. The first focus waits 1 second; a new challenger waits 1.45 seconds. Moving across candidates resets that clock. Choose an area bypasses inference.
+
+## 3. Classify the task surface
 
 The engine classifies the pointer context as an atomic reading surface, collection, interaction surface, or media surface. Composite grids, mail lists, calendars, and message panes resolve to their enclosing collection. Open messages, articles, posts, and answers can resolve to an atomic surface.
 
 Menus, popovers, dialogs, dragging, and fullscreen suspend automatic focus. They do not become reading targets. Pinned and manually chosen surfaces remain the incumbent while the overlay is hidden, then return after the interaction closes.
 
-## 3. Select a candidate
+## 4. Select a candidate
 
-The engine collects nearby ancestors, rejects utility context, scores readable surfaces, and expands only when the child is too narrow to stand alone. Known sites contribute selectors and rejection rules through `site-profiles.js`.
+The engine collects nearby ancestors, rejects utility context, scores readable surfaces, and expands only when the child is too narrow to stand alone. Accepted surfaces bound token-based rejection, which prevents an outer app wrapper such as `composer-parent` from invalidating content inside it. Explicit selectors resolve by DOM proximity rather than declaration order.
 
-`focus-policy.js` owns the incumbent/challenger state. The incumbent stays visible until the same challenger completes the required dwell. Passive DOM changes may refresh geometry but never choose a new surface.
+When a conversation turn is taller than the viewport, the engine selects the local paragraph, list, code block, table, figure, or heading under the pointer. Manual area selection uses a separate visual-region pass, so a user can deliberately pin a sidebar or folder panel that automatic mode ignores.
 
-## 4. Compute visible geometry
+`focus-policy.js` owns the incumbent/challenger state. Leaving an incumbent retires its visual cutout after a short exit delay, while internal ownership remains briefly available for a quick return. The next candidate must still complete its dwell. Rejected chrome, viewport exit, route changes, and restored interactions cannot revive a stale visual owner.
 
-`rectForElement` adds configured padding, clips the rectangle against ancestor scrollports and the viewport, and records which edges were clipped. Corners created by clipping are square; exposed corners use the configured radius.
+## 5. Compute visible geometry
 
-## 5. Render one shape
+`rectForElement` adds configured padding, clips the rectangle against ancestor scrollports and the viewport, and records which edges were clipped. For long paragraphs distorted by adjacent floated content, it uses the rendered text range instead of the inflated CSS block box. Corners created by clipping are square; exposed corners use the configured radius.
+
+## 6. Render one shape
 
 The SVG mask and outline use the same interpolated rectangle on every animation frame. The overlay lives in an `aria-hidden` shadow host with `pointer-events: none`.
 
@@ -41,6 +49,6 @@ Settings live in Chrome sync storage. Paused tab identifiers live in Chrome sess
 
 ## Extension lifecycle
 
-Content scripts mount at `document_idle`. The popup can inject the runtime files into an eligible tab when an already-open page predates installation or update. Injection is version guarded, and the popup retries state reads while the asynchronous mount finishes.
+Content scripts mount at `document_idle`. Installation and update events also inject the version-guarded runtime into eligible pages that were already open. The popup retains a per-page repair path when Chrome blocks automatic injection.
 
 Same-document navigation refreshes the active profile. Back-forward cache page hide/show events suspend and restore the runtime without losing the page lifecycle.

@@ -10,24 +10,19 @@ Umbra
 
 ## Summary
 
-Keep one block clear on busy webpages without leaving the original site.
+Keep the part of a webpage you are using clear and darken everything around it.
 
 ## Description
 
-Umbra dims the area around one block while keeping the original webpage visible and interactive.
+Umbra adds automatic visual focus to webpages. After your pointer settles, the section you are using stays clear while the rest of the page darkens.
 
-It can select a message, post, question, issue row, or article section after the pointer rests or scrolling settles. Choose an area lets you select and pin a block directly when automatic selection is not appropriate.
+The extension chooses the scale that fits the page. Articles, opened messages, posts, questions, and answers can focus individually. Inbox lists, calendars, tables, and conversations stay together while you scan them.
 
-The popup keeps routine controls together:
+Umbra waits before changing focus, so crossing a sidebar or toolbar does not immediately move the clear area. Menus, dialogs, editing, dragging, and fullscreen suspend the overlay.
 
-- Turn Umbra on or off.
-- Choose or clear an area.
-- Adjust how dark the surrounding page becomes.
-- Set the current site to Automatic, On request, or Off.
-- Pause Umbra for the current tab.
-- Open Settings for automatic focus, outline, site choices, and shortcuts.
+Choose an area lets you select and pin a section directly. The popup also controls page darkness, behavior for the current site, and tab pause.
 
-Umbra processes page structure locally. It does not send page content, URLs, pointer history, or usage analytics to Cassini Research.
+Page structure and pointer position are processed inside the browser. Umbra sends no page content, URLs, pointer history, or usage analytics to Cassini Research.
 
 ## Permission notes
 
@@ -60,4 +55,4 @@ npm run validate
 npm run package:extension
 ```
 
-Upload `dist/umbra-2.5.1.zip`.
+Upload `dist/umbra-2.7.0.zip`.
